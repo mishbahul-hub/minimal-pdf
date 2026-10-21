@@ -8,15 +8,62 @@ pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
 const APP_NAME = "Minimal PDF";
 const START_MESSAGE = "Press Ctrl+O to open a PDF";
-const DEFAULT_SCALE = 1.25;
 
-const pagesEl = document.querySelector<HTMLElement>("#pages")!;
+// 100% zoom = real paper size: 1 PDF point is 96/72 CSS pixels.
+const CSS_UNITS = pdfjs.PixelsPerInch.PDF_TO_CSS_UNITS;
+const ZOOM_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
+const MIN_ZOOM = 0.25;
+const MAX_ZOOM = 5;
+const FIT_PADDING = 16; // must match #pages padding
+const MAX_RENDERED = 10; // canvases kept alive (more only if more are on screen)
+const MAX_CONCURRENT = 2; // renders in flight at once
+const SETTLE_MS = 150; // re-render this long after the last zoom change
+const INDICATOR_MS = 1200;
+
+export type ZoomMode = "custom" | "fit-width" | "fit-page";
+
+type Slot = {
+  n: number;
+  page: pdfjs.PDFPageProxy;
+  baseW: number; // page size in CSS px at zoom 1
+  baseH: number;
+  el: HTMLDivElement;
+  canvas: HTMLCanvasElement | null;
+  renderedKey: number; // zoom × dpr the canvas was drawn at; 0 = nothing drawn
+  task: pdfjs.RenderTask | null;
+  visible: boolean; // within the observer's one-screen margin
+};
+
+const scroller = document.querySelector<HTMLElement>("#pages")!;
 const messageEl = document.querySelector<HTMLElement>("#message")!;
+const indicatorEl = document.querySelector<HTMLElement>("#indicator")!;
 
 // The loading task owns the document; destroying it frees the document and its worker data.
 let currentTask: pdfjs.PDFDocumentLoadingTask | null = null;
 // Incremented on every open, so a slow earlier load can't overwrite a newer one.
 let loadId = 0;
+
+let slots: Slot[] = [];
+let zoom = 1;
+let zoomMode: ZoomMode = "fit-width";
+let currentPage = 1;
+let activeRenders = 0;
+let settling = false;
+let settleTimer = 0;
+let indicatorTimer = 0;
+let scrollFrame = 0;
+let resizeFrame = 0;
+
+const observer = new IntersectionObserver(onIntersect, {
+  root: scroller,
+  rootMargin: "100% 0px", // about one screen above and below
+});
+
+scroller.addEventListener("scroll", onScroll, { passive: true });
+scroller.addEventListener("wheel", onWheel, { passive: false });
+new ResizeObserver(onResize).observe(scroller);
+// Fires when the window moves to a screen with a different scale factor.
+window.addEventListener("resize", () => pump());
 
 export function showStartScreen() {
   showMessage(START_MESSAGE);
@@ -49,16 +96,19 @@ export async function openPdf() {
   await openBytes(data, name);
 }
 
-/** Load PDF bytes and render every page. Split out from openPdf so it can be driven without the dialog. */
+/** Load PDF bytes and lay out placeholders for every page. Split out from openPdf so it can be driven without the dialog. */
 export async function openBytes(data: Uint8Array, name: string) {
   const id = ++loadId;
   await closeCurrent();
   const task = pdfjs.getDocument({ data });
   currentTask = task;
 
-  let pdf: pdfjs.PDFDocumentProxy;
+  let pages: pdfjs.PDFPageProxy[];
   try {
-    pdf = await task.promise;
+    const pdf = await task.promise;
+    pages = await Promise.all(
+      Array.from({ length: pdf.numPages }, (_, i) => pdf.getPage(i + 1)),
+    );
   } catch (err) {
     if (id !== loadId) return;
     console.error(err);
@@ -69,43 +119,286 @@ export async function openBytes(data: Uint8Array, name: string) {
 
   hideMessage();
   await setTitle(`${name} — ${APP_NAME}`);
+  if (id !== loadId) return;
 
-  // Rendering every page up front is fine for now; Stage 2 replaces it with lazy rendering.
-  try {
-    for (let n = 1; n <= pdf.numPages; n++) {
-      if (id !== loadId) return;
-      await renderPage(pdf, n, DEFAULT_SCALE);
-    }
-  } catch (err) {
-    // A newer open destroys this document mid-render; that's expected.
-    if (id === loadId) console.error(err);
+  slots = pages.map((page, i) => {
+    const vp = page.getViewport({ scale: CSS_UNITS });
+    const el = document.createElement("div");
+    el.className = "page";
+    el.dataset.index = String(i);
+    return {
+      n: i + 1,
+      page,
+      baseW: vp.width,
+      baseH: vp.height,
+      el,
+      canvas: null,
+      renderedKey: 0,
+      task: null,
+      visible: false,
+    };
+  });
+  currentPage = 1;
+  if (zoomMode !== "custom") zoom = fitZoom(zoomMode);
+  applySizes();
+
+  const frag = document.createDocumentFragment();
+  for (const s of slots) frag.append(s.el);
+  scroller.append(frag);
+  for (const s of slots) observer.observe(s.el);
+  showIndicator(pageLabel());
+}
+
+// ---------------------------------------------------------------------------
+// Lazy rendering
+
+function onIntersect(entries: IntersectionObserverEntry[]) {
+  for (const e of entries) {
+    const slot = slots[Number((e.target as HTMLElement).dataset.index)];
+    if (!slot || slot.el !== e.target) continue;
+    slot.visible = e.isIntersecting;
+    if (!slot.visible) slot.task?.cancel();
+  }
+  pump();
+}
+
+/** Start renders for nearby pages that need one, closest to the current page first. */
+function pump() {
+  if (settling || activeRenders >= MAX_CONCURRENT) return;
+  const key = renderKey();
+  const wanted = slots
+    .filter((s) => s.visible && !s.task && s.renderedKey !== key)
+    .sort((a, b) => Math.abs(a.n - currentPage) - Math.abs(b.n - currentPage));
+  for (const s of wanted) {
+    if (activeRenders >= MAX_CONCURRENT) break;
+    render(s);
   }
 }
 
-async function renderPage(pdf: pdfjs.PDFDocumentProxy, n: number, scale: number) {
-  const page = await pdf.getPage(n);
-  const vp = page.getViewport({ scale });
+function render(slot: Slot) {
+  const id = loadId;
+  const key = renderKey();
   const dpr = window.devicePixelRatio || 1;
+  const vp = slot.page.getViewport({ scale: zoom * CSS_UNITS });
 
-  const wrapper = document.createElement("div");
-  wrapper.className = "page";
-  wrapper.dataset.page = String(n);
-
+  // Draw into a new canvas and swap it in when done, so the old (stretched) one stays visible meanwhile.
   const canvas = document.createElement("canvas");
-  canvas.width = Math.floor(vp.width * dpr);
-  canvas.height = Math.floor(vp.height * dpr);
-  canvas.style.width = `${Math.floor(vp.width)}px`;
-  canvas.style.height = `${Math.floor(vp.height)}px`;
+  // Round to whole device pixels of the page box, so the canvas maps 1:1 onto the screen.
+  canvas.width = Math.round(vp.width * dpr);
+  canvas.height = Math.round(vp.height * dpr);
 
-  wrapper.append(canvas);
-  pagesEl.append(wrapper);
-
-  await page.render({
+  const task = slot.page.render({
     canvas,
     viewport: vp,
     transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined,
-  }).promise;
+  });
+  slot.task = task;
+  activeRenders++;
+
+  task.promise.then(
+    () => {
+      if (id !== loadId) return;
+      slot.task = null;
+      activeRenders--;
+      freeCanvas(slot);
+      slot.canvas = canvas;
+      slot.renderedKey = key;
+      slot.el.append(canvas);
+      evictFarPages();
+      pump();
+    },
+    (err) => {
+      canvas.width = canvas.height = 0;
+      if (id !== loadId) return;
+      slot.task = null;
+      activeRenders--;
+      if (!(err instanceof pdfjs.RenderingCancelledException)) console.error(err);
+      pump();
+    },
+  );
 }
+
+/** Keep memory flat: free canvases far from the current page, never ones on screen. */
+function evictFarPages() {
+  const rendered = slots.filter((s) => s.canvas);
+  let excess = rendered.length - MAX_RENDERED;
+  if (excess <= 0) return;
+  const candidates = rendered
+    .filter((s) => !s.visible)
+    .sort((a, b) => Math.abs(b.n - currentPage) - Math.abs(a.n - currentPage));
+  for (const s of candidates) {
+    if (excess-- <= 0) break;
+    freeCanvas(s);
+    s.page.cleanup();
+  }
+}
+
+function freeCanvas(slot: Slot) {
+  if (!slot.canvas) return;
+  // Zero size first so the browser releases the pixel buffer right away.
+  slot.canvas.width = slot.canvas.height = 0;
+  slot.canvas.remove();
+  slot.canvas = null;
+  slot.renderedKey = 0;
+}
+
+function renderKey() {
+  return zoom * (window.devicePixelRatio || 1);
+}
+
+// ---------------------------------------------------------------------------
+// Current page
+
+function onScroll() {
+  if (scrollFrame) return;
+  scrollFrame = requestAnimationFrame(() => {
+    scrollFrame = 0;
+    const n = slotAt(scroller.scrollTop + scroller.clientHeight / 2)?.n ?? 1;
+    if (n !== currentPage) {
+      currentPage = n;
+      pump();
+    }
+    showIndicator(pageLabel());
+  });
+}
+
+/** The page covering document offset y (binary search; pages are stacked in order). */
+function slotAt(y: number): Slot | undefined {
+  let lo = 0;
+  let hi = slots.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (slots[mid].el.offsetTop <= y) lo = mid;
+    else hi = mid - 1;
+  }
+  return slots[lo];
+}
+
+export function getCurrentPage() {
+  return currentPage;
+}
+
+export function getPageCount() {
+  return slots.length;
+}
+
+function pageLabel() {
+  return `${currentPage} / ${slots.length}`;
+}
+
+function showIndicator(text: string) {
+  indicatorEl.textContent = text;
+  indicatorEl.classList.add("shown");
+  clearTimeout(indicatorTimer);
+  indicatorTimer = window.setTimeout(() => indicatorEl.classList.remove("shown"), INDICATOR_MS);
+}
+
+// ---------------------------------------------------------------------------
+// Zoom
+
+export function getZoom() {
+  return { zoom, mode: zoomMode };
+}
+
+export function zoomIn() {
+  setZoom(ZOOM_STEPS.find((z) => z > zoom + 0.001) ?? MAX_ZOOM, "custom");
+}
+
+export function zoomOut() {
+  setZoom([...ZOOM_STEPS].reverse().find((z) => z < zoom - 0.001) ?? MIN_ZOOM, "custom");
+}
+
+export function resetZoom() {
+  setZoom(1, "custom");
+}
+
+/** Toggle between fit width and fit page. */
+export function toggleFit() {
+  const mode: ZoomMode = zoomMode === "fit-width" ? "fit-page" : "fit-width";
+  setZoom(fitZoom(mode), mode);
+}
+
+/**
+ * Change zoom while keeping the point at `focus` (scroller-relative px; default: the
+ * centre) over the same spot of the same page.
+ */
+export function setZoom(next: number, mode: ZoomMode, focus?: { x: number; y: number }) {
+  if (!slots.length) return;
+  next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, next));
+  zoomMode = mode;
+  if (Math.abs(next - zoom) < 0.0001) return;
+
+  const fx = focus?.x ?? scroller.clientWidth / 2;
+  const fy = focus?.y ?? scroller.clientHeight / 2;
+  const docY = scroller.scrollTop + fy;
+  const docX = scroller.scrollLeft + fx;
+  const anchor = slotAt(docY)!;
+  const fracY = (docY - anchor.el.offsetTop) / anchor.el.offsetHeight;
+  const fracX = (docX - anchor.el.offsetLeft) / anchor.el.offsetWidth;
+
+  zoom = next;
+  applySizes();
+  scroller.scrollTop = anchor.el.offsetTop + fracY * anchor.el.offsetHeight - fy;
+  scroller.scrollLeft = anchor.el.offsetLeft + fracX * anchor.el.offsetWidth - fx;
+
+  // Stretched canvases show instantly; re-render sharp once zooming pauses.
+  for (const s of slots) s.task?.cancel();
+  settling = true;
+  clearTimeout(settleTimer);
+  settleTimer = window.setTimeout(() => {
+    settling = false;
+    pump();
+  }, SETTLE_MS);
+  showIndicator(`${Math.round(zoom * 100)}%`);
+}
+
+function fitZoom(mode: ZoomMode): number {
+  const s = slots[currentPage - 1] ?? slots[0];
+  if (!s) return zoom;
+  const byWidth = (scroller.clientWidth - 2 * FIT_PADDING) / s.baseW;
+  if (mode === "fit-width") return byWidth;
+  return Math.min(byWidth, (scroller.clientHeight - 2 * FIT_PADDING) / s.baseH);
+}
+
+function applySizes() {
+  for (const s of slots) {
+    s.el.style.width = `${s.baseW * zoom}px`;
+    s.el.style.height = `${s.baseH * zoom}px`;
+  }
+}
+
+function onWheel(e: WheelEvent) {
+  if (!e.ctrlKey) return; // plain wheel scrolls as usual
+  e.preventDefault(); // also stops the WebView's own page zoom
+  if (!slots.length) return;
+  const rect = scroller.getBoundingClientRect();
+  const focus = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  const dy = e.deltaMode === WheelEvent.DOM_DELTA_LINE ? e.deltaY * 16 : e.deltaY;
+  if (Math.abs(dy) >= 50) {
+    // Mouse wheel notch: one zoom step.
+    const next =
+      dy < 0
+        ? ZOOM_STEPS.find((z) => z > zoom + 0.001) ?? MAX_ZOOM
+        : [...ZOOM_STEPS].reverse().find((z) => z < zoom - 0.001) ?? MIN_ZOOM;
+    setZoom(next, "custom", focus);
+  } else {
+    // Trackpad pinch arrives as small Ctrl+wheel deltas: zoom smoothly.
+    setZoom(zoom * Math.exp(-dy * 0.01), "custom", focus);
+  }
+}
+
+// Re-fit on the next frame: resizing pages inside the ResizeObserver callback can
+// change the scroller's size again and trigger "ResizeObserver loop" errors.
+function onResize() {
+  if (resizeFrame) return;
+  resizeFrame = requestAnimationFrame(() => {
+    resizeFrame = 0;
+    if (slots.length && zoomMode !== "custom") setZoom(fitZoom(zoomMode), zoomMode);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Errors, messages, cleanup
 
 function describeLoadError(err: unknown): string {
   if (err instanceof pdfjs.PasswordException) {
@@ -125,8 +418,18 @@ async function showError(name: string, reason: string) {
 }
 
 async function closeCurrent() {
-  pagesEl.replaceChildren();
-  pagesEl.scrollTop = 0;
+  observer.disconnect();
+  for (const s of slots) {
+    s.task?.cancel();
+    freeCanvas(s);
+  }
+  slots = [];
+  activeRenders = 0;
+  settling = false;
+  clearTimeout(settleTimer);
+  scroller.replaceChildren();
+  scroller.scrollTop = 0;
+  scroller.scrollLeft = 0;
   const task = currentTask;
   currentTask = null;
   await task?.destroy();

@@ -14,14 +14,19 @@ body {
   height: 100%;
 }
 
+/* position: relative so page offsetTop/offsetLeft are measured from the scroller. */
 #pages {
+  position: relative;
   height: 100%;
   overflow: auto;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 16px 0;
+  padding: 16px; /* FIT_PADDING in viewer.ts */
   box-sizing: border-box;
+  touch-action: pan-x pan-y; /* no touchscreen pinch-zoom of the whole page */
+  overflow-anchor: none; /* viewer.ts keeps the scroll anchor itself when zooming */
+  scrollbar-gutter: stable; /* width doesn't change when the scrollbar appears, so fit-width is right first time */
 }
 
 /* Auto margins (not align-items: center) so a page wider than the window
@@ -33,8 +38,31 @@ body {
   box-shadow: var(--page-shadow);
 }
 
+/* Fill the page box, so after a zoom the old canvas stretches until it is re-rendered. */
 .page canvas {
   display: block;
+  width: 100%;
+  height: 100%;
+}
+
+#indicator {
+  position: fixed;
+  right: 20px;
+  bottom: 16px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.62);
+  color: #fff;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0;
+  transition: opacity 0.4s;
+  pointer-events: none;
+}
+
+#indicator.shown {
+  opacity: 1;
+  transition: none;
 }
 
 #message {

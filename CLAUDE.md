@@ -3,7 +3,7 @@
 Minimalist, keyboard-first desktop PDF reader built with **Tauri 2 + vanilla TypeScript + PDF.js**.
 The page is the whole interface. Targets: opens instantly, stays out of the way, installer under ~10 MB.
 
-**Current stage: 1 (Open a file and render pages).** Stage 0 done. Update this line when a stage's "done when" check passes.
+**Current stage: 3 (Keyboard shortcuts).** Stages 0–2 done. Update this line when a stage's "done when" check passes.
 
 ## Design principles (do not violate)
 
@@ -75,7 +75,8 @@ Keep each concern in its own module as above. Don't create new top-level modules
 - **Tauri permissions**: any new plugin API call needs a matching permission in `src-tauri/capabilities/default.json`. Current set: `dialog:allow-open`, `fs:allow-read-file`, `store:default`, `core:window:allow-set-title`, `core:window:allow-set-fullscreen`. If an API call fails silently or with a permission error, check this file first. No static fs scope is needed: the dialog plugin adds each file the user picks to the fs scope at runtime. Paths that didn't come from the dialog (e.g. recent files in Stage 4, launch args in Stage 6) will need a scope.
 - **Rust on this machine**: if `cargo` isn't found in a shell, prepend `%USERPROFILE%\.cargo\bin` to PATH (or restart VS Code). First `tauri dev` build takes ~3 min; later runs are cached.
 - **Lazy rendering (Stage 2)**: one placeholder `<div>` per page sized from `getViewport()`; `IntersectionObserver` with ~1 screen margin; keep ~10 rendered canvases and free the rest; cancel in-flight renders with `renderTask.cancel()` on leave/zoom.
-- **Zoom**: steps 50/75/100/125/150/200/300%. Apply instantly with a CSS transform, then re-render debounced (~150 ms). Always preserve the anchor (page + offset within page). Fit width = container width ÷ page width at scale 1; fit page = min of width/height ratios. Re-fit on resize in fit-width mode.
+- **Zoom**: steps 50/75/100/125/150/200/300%. 100% = real paper size (`PixelsPerInch.PDF_TO_CSS_UNITS`, 96/72). Default mode is fit-width. A zoom resizes the page boxes instantly (old canvases stretch to fill), then re-renders sharp after ~150 ms; this replaces the plan's CSS-transform idea. Always preserve the anchor (page + fraction under the mouse or screen centre). Fit width/page use the current page's size and the `#pages` padding (`FIT_PADDING`). Re-fit on resize in fit modes. Ctrl+wheel: a notch (|deltaY| ≥ 50) = one step, smaller deltas (trackpad pinch) zoom smoothly. WebView2's own zoom is off (`zoomHotkeysEnabled` defaults to false); `overflow-anchor: none` on `#pages` so the browser doesn't fight the zoom anchoring.
+- **viewer.ts exports for Stage 3 keys**: `zoomIn`, `zoomOut`, `resetZoom`, `toggleFit`, `setZoom`, `getZoom`, `getCurrentPage`, `getPageCount`.
 - **Keyboard**: all shortcuts in one keymap object in `keys.ts`. Ignore shortcuts while focus is in an input. `g g` uses a ~500 ms sequence timeout. The `?` help overlay is generated from the keymap; never hand-maintain a separate list.
 - **Themes**: colours as CSS variables on `:root`. Dark page filter: `invert(1) hue-rotate(180deg)`; sepia: `sepia(0.35) brightness(0.95)`. First launch follows `prefers-color-scheme`, then persists the user's choice.
 - **Positions**: per file (keyed by path, optionally + file size): `{ page, offset (0–1), zoom, opened }`. Save debounced ~500 ms on scroll and on window close. On open, restore zoom first, then scroll. Keep last 10 recent files for the start screen.
