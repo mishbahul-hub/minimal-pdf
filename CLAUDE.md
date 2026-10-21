@@ -68,9 +68,11 @@ Keep each concern in its own module as above. Don't create new top-level modules
   import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
   pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
   ```
-- **Load PDFs from bytes**: read with `readFile(path)` from plugin-fs, then `getDocument({ data })`.
+- **Load PDFs from bytes**: read with `readFile(path)` from plugin-fs, then `getDocument({ data })`. `viewer.ts` splits this into `openPdf()` (dialog + read) and `openBytes(data, name)` so loading can be tested without the native dialog.
+- **PDF.js v6 API**: `page.render({ canvas, viewport, transform })` (not `canvasContext`); `destroy()` exists only on the loading task, so keep the task to free a document.
+- **Page centering**: use `margin: 0 auto` on `.page`, not `align-items: center` on the scroller, or pages wider than the window get clipped on the left.
 - **High-DPI rendering**: canvas pixel size = viewport × `devicePixelRatio`; CSS size = unscaled viewport; pass `transform: [dpr,0,0,dpr,0,0]` to `page.render`.
-- **Tauri permissions**: any new plugin API call needs a matching permission in `src-tauri/capabilities/default.json`. Current set: `dialog:allow-open`, `fs:allow-read-file`, `store:default`, `core:window:allow-set-fullscreen`. If an API call fails silently or with a permission error, check this file first. `fs:allow-read-file` has no path scope yet; Stage 1 must add an fs scope so files picked in the dialog can be read.
+- **Tauri permissions**: any new plugin API call needs a matching permission in `src-tauri/capabilities/default.json`. Current set: `dialog:allow-open`, `fs:allow-read-file`, `store:default`, `core:window:allow-set-title`, `core:window:allow-set-fullscreen`. If an API call fails silently or with a permission error, check this file first. No static fs scope is needed: the dialog plugin adds each file the user picks to the fs scope at runtime. Paths that didn't come from the dialog (e.g. recent files in Stage 4, launch args in Stage 6) will need a scope.
 - **Rust on this machine**: if `cargo` isn't found in a shell, prepend `%USERPROFILE%\.cargo\bin` to PATH (or restart VS Code). First `tauri dev` build takes ~3 min; later runs are cached.
 - **Lazy rendering (Stage 2)**: one placeholder `<div>` per page sized from `getViewport()`; `IntersectionObserver` with ~1 screen margin; keep ~10 rendered canvases and free the rest; cancel in-flight renders with `renderTask.cancel()` on leave/zoom.
 - **Zoom**: steps 50/75/100/125/150/200/300%. Apply instantly with a CSS transform, then re-render debounced (~150 ms). Always preserve the anchor (page + offset within page). Fit width = container width ÷ page width at scale 1; fit page = min of width/height ratios. Re-fit on resize in fit-width mode.

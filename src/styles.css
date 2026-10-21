@@ -1,6 +1,8 @@
 :root {
   --bg: #e9e9e7;
   --text: #1f1f1f;
+  --muted: #6b6b68;
+  --page-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
   font-family: system-ui, sans-serif;
   color: var(--text);
   background-color: var(--bg);
@@ -15,4 +17,39 @@ body {
 #pages {
   height: 100%;
   overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 0;
+  box-sizing: border-box;
+}
+
+/* Auto margins (not align-items: center) so a page wider than the window
+   overflows to the right and stays scrollable instead of being clipped on the left. */
+.page {
+  flex: none;
+  margin: 0 auto;
+  background: #fff;
+  box-shadow: var(--page-shadow);
+}
+
+.page canvas {
+  display: block;
+}
+
+#message {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: var(--muted);
+  text-align: center;
+  white-space: pre-line;
+  pointer-events: none;
+  user-select: none;
+}
+
+#message[hidden] {
+  display: none;
 }
