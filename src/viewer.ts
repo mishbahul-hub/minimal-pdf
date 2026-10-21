@@ -286,6 +286,74 @@ function pageLabel() {
   return `${currentPage} / ${slots.length}`;
 }
 
+// ---------------------------------------------------------------------------
+// Navigation
+
+const LINE_PX = 64; // j / k
+const SCREEN_OVERLAP = 0.1; // Space keeps 10% of the previous screen in view
+
+export function scrollLines(n: number) {
+  scroller.scrollTop += n * LINE_PX;
+}
+
+export function scrollScreens(n: number) {
+  scroller.scrollTop += n * scroller.clientHeight * (1 - SCREEN_OVERLAP);
+}
+
+/** Scroll so page n's top sits at the top of the view (same gap as the first page). */
+export function goToPage(n: number) {
+  if (!slots.length) return;
+  n = Math.min(slots.length, Math.max(1, Math.round(n)));
+  scroller.scrollTop = slots[n - 1].el.offsetTop - FIT_PADDING;
+}
+
+/** The page at the top edge of the view; next/previous page are relative to it, not to the centre. */
+function topSlot(): Slot | undefined {
+  return slotAt(scroller.scrollTop + FIT_PADDING + 1);
+}
+
+export function nextPage() {
+  const s = topSlot();
+  if (s) goToPage(s.n + 1);
+}
+
+export function prevPage() {
+  const s = topSlot();
+  if (!s) return;
+  // Partway down a page: go back to its top first.
+  const partway = scroller.scrollTop > s.el.offsetTop - FIT_PADDING + 1;
+  goToPage(partway ? s.n : s.n - 1);
+}
+
+export function firstPage() {
+  goToPage(1);
+}
+
+export function lastPage() {
+  goToPage(slots.length);
+}
+
+// ---------------------------------------------------------------------------
+// Fullscreen
+
+export async function toggleFullscreen() {
+  try {
+    const win = getCurrentWindow();
+    await win.setFullscreen(!(await win.isFullscreen()));
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+export async function exitFullscreen() {
+  try {
+    const win = getCurrentWindow();
+    if (await win.isFullscreen()) await win.setFullscreen(false);
+  } catch (err) {
+    console.error(err);
+  }
+}
+
 function showIndicator(text: string) {
   indicatorEl.textContent = text;
   indicatorEl.classList.add("shown");

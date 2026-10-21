@@ -3,7 +3,7 @@
 Minimalist, keyboard-first desktop PDF reader built with **Tauri 2 + vanilla TypeScript + PDF.js**.
 The page is the whole interface. Targets: opens instantly, stays out of the way, installer under ~10 MB.
 
-**Current stage: 3 (Keyboard shortcuts).** Stages 0–2 done. Update this line when a stage's "done when" check passes.
+**Current stage: 4 (Dark mode and remember last position).** Stages 0–3 done. Update this line when a stage's "done when" check passes.
 
 ## Design principles (do not violate)
 
@@ -46,7 +46,8 @@ Then `npm install pdfjs-dist` and `npm run tauri add dialog`, `fs`, `store`.
 src/
   main.ts        app start, wiring
   viewer.ts      load PDF, render pages, lazy rendering, zoom
-  keys.ts        single keymap object (key -> function), help overlay source
+  keys.ts        single keymap (KEYMAP: keys, label, help, action) + key dispatch; help overlay source
+  overlays.ts    on-demand overlays (go-to box, ? help); Esc closes the most recent one. Stage 5 search bar / TOC register here too
   settings.ts    store: theme, per-file positions, recent files
   search.ts      text search + highlights
   outline.ts     table of contents sidebar
@@ -77,7 +78,10 @@ Keep each concern in its own module as above. Don't create new top-level modules
 - **Lazy rendering (Stage 2)**: one placeholder `<div>` per page sized from `getViewport()`; `IntersectionObserver` with ~1 screen margin; keep ~10 rendered canvases and free the rest; cancel in-flight renders with `renderTask.cancel()` on leave/zoom.
 - **Zoom**: steps 50/75/100/125/150/200/300%. 100% = real paper size (`PixelsPerInch.PDF_TO_CSS_UNITS`, 96/72). Default mode is fit-width. A zoom resizes the page boxes instantly (old canvases stretch to fill), then re-renders sharp after ~150 ms; this replaces the plan's CSS-transform idea. Always preserve the anchor (page + fraction under the mouse or screen centre). Fit width/page use the current page's size and the `#pages` padding (`FIT_PADDING`). Re-fit on resize in fit modes. Ctrl+wheel: a notch (|deltaY| ≥ 50) = one step, smaller deltas (trackpad pinch) zoom smoothly. WebView2's own zoom is off (`zoomHotkeysEnabled` defaults to false); `overflow-anchor: none` on `#pages` so the browser doesn't fight the zoom anchoring.
 - **viewer.ts exports for Stage 3 keys**: `zoomIn`, `zoomOut`, `resetZoom`, `toggleFit`, `setZoom`, `getZoom`, `getCurrentPage`, `getPageCount`.
-- **Keyboard**: all shortcuts in one keymap object in `keys.ts`. Ignore shortcuts while focus is in an input. `g g` uses a ~500 ms sequence timeout. The `?` help overlay is generated from the keymap; never hand-maintain a separate list.
+- **Keyboard**: all shortcuts in `KEYMAP` in `keys.ts`. Key names come from `keyName()`: `Ctrl+o`, `j`, `G`, `?`, `Space`, `Shift+Space`, `ArrowDown`; Shift is only spelled out for non-printable keys; a space separates sequences (`g g`, 500 ms timeout). Ignore shortcuts while focus is in an input; inputs handle their own Enter/Esc explicitly (don't rely on implicit form submission). Bindings without `repeat: true` ignore key auto-repeat. Esc closes the top overlay, otherwise leaves fullscreen. The `?` help overlay is generated from the keymap; never hand-maintain a separate list. Stage 4/5 keys (`d`, `/`, `t`) get added to `KEYMAP` when their features land.
+- **Navigation**: next/previous page are relative to the page at the top edge of the view (not the centre-based current page); `goToPage` aligns the page top with `FIT_PADDING` of space.
+- **Window**: starts hidden (`visible: false`); `lib.rs` shrinks it to the monitor work area if the 900×1100 default doesn't fit, centres it, then shows it.
+- **Testing in the running app**: launch with `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222` and drive it over the DevTools protocol (`Runtime.evaluate` with `import("/src/viewer.ts")`, `Input.dispatchKeyEvent`, `Page.captureScreenshot`). Don't use the window during a run; real input skews results.
 - **Themes**: colours as CSS variables on `:root`. Dark page filter: `invert(1) hue-rotate(180deg)`; sepia: `sepia(0.35) brightness(0.95)`. First launch follows `prefers-color-scheme`, then persists the user's choice.
 - **Positions**: per file (keyed by path, optionally + file size): `{ page, offset (0–1), zoom, opened }`. Save debounced ~500 ms on scroll and on window close. On open, restore zoom first, then scroll. Keep last 10 recent files for the start screen.
 - **Search (Stage 5)**: cache `page.getTextContent()` per page; search page by page in the background with progress; cancel previous search on query change; case-insensitive, whitespace/line-break tolerant; highlight with `<mark>` in the text layer. Scanned PDFs → show "No searchable text in this PDF".

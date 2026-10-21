@@ -3,6 +3,9 @@
   --text: #1f1f1f;
   --muted: #6b6b68;
   --page-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  --panel-bg: #fbfbfa;
+  --panel-border: #d4d4d0;
+  --accent: #3b6fd8;
   font-family: system-ui, sans-serif;
   color: var(--text);
   background-color: var(--bg);
@@ -80,4 +83,91 @@ body {
 
 #message[hidden] {
   display: none;
+}
+
+/* ---- Overlays (go-to box, help) ---- */
+
+.panel {
+  background: var(--panel-bg);
+  color: var(--text);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+}
+
+#goto {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 12px;
+  font-size: 14px;
+}
+
+#goto[hidden],
+#help[hidden] {
+  display: none;
+}
+
+#goto label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+
+#goto-input {
+  width: 5em;
+  padding: 3px 6px;
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+  outline: none;
+  text-align: center;
+}
+
+#goto-input:focus {
+  border-color: var(--accent);
+}
+
+#help {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+#help .panel {
+  max-height: 100%;
+  overflow: auto;
+  padding: 16px 20px;
+  font-size: 14px;
+}
+
+#help h2 {
+  margin: 0 0 12px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+#help-list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 20px;
+  margin: 0;
+}
+
+#help-list dt {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+#help-list dd {
+  margin: 0;
+  color: var(--muted);
 }

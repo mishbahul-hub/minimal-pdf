@@ -15,7 +15,9 @@
       {
         "title": "Minimal PDF",
         "width": 900,
-        "height": 1100
+        "height": 1100,
+        "center": true,
+        "visible": false
       }
     ],
     "security": {
