@@ -1,0 +1,46 @@
+# Builds the Windows installers and creates a draft GitHub Release when a version tag is pushed:
+#   git tag v0.2.0 && git push origin v0.2.0
+# Publish the draft on GitHub to make it the latest release; installed apps then offer the update.
+#
+# Needs the repository secret TAURI_SIGNING_PRIVATE_KEY (the contents of the updater private key)
+# and, if the key has a password, TAURI_SIGNING_PRIVATE_KEY_PASSWORD.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - run: npm ci
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "Minimal PDF ${{ github.ref_name }}"
+          releaseBody: "Download `Minimal PDF_*_x64-setup.exe` below and run it. Already installed? The app offers this update by itself."
+          releaseDraft: true
+          prerelease: false
+          includeUpdaterJson: true

@@ -7,8 +7,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use serde::Serialize;
-use tauri::ipc::Channel;
 use tauri::State;
+use tauri::ipc::Channel;
 
 const API_URL: &str = "https://api.anthropic.com/v1/messages";
 const API_VERSION: &str = "2023-06-01";
@@ -29,7 +29,10 @@ pub struct AiError {
 }
 
 fn err(kind: &'static str, message: impl Into<String>) -> AiError {
-    AiError { kind, message: message.into() }
+    AiError {
+        kind,
+        message: message.into(),
+    }
 }
 
 fn entry() -> Result<keyring::Entry, AiError> {
@@ -65,7 +68,9 @@ pub fn ai_set_key(key: String) -> Result<(), AiError> {
     if key.is_empty() {
         return Err(err("no_key", "The key is empty."));
     }
-    entry()?.set_password(key).map_err(|e| err("api", e.to_string()))
+    entry()?
+        .set_password(key)
+        .map_err(|e| err("api", e.to_string()))
 }
 
 #[tauri::command]
@@ -95,7 +100,11 @@ pub async fn ai_stream(
 ) -> Result<(), AiError> {
     let key = stored_key().ok_or_else(|| err("no_key", "Add your Claude API key first."))?;
     let cancelled = Arc::new(AtomicBool::new(false));
-    streams.0.lock().unwrap().insert(request_id.clone(), cancelled.clone());
+    streams
+        .0
+        .lock()
+        .unwrap()
+        .insert(request_id.clone(), cancelled.clone());
     let result = stream(&key, body, &betas, &on_event, &cancelled).await;
     streams.0.lock().unwrap().remove(&request_id);
     result
@@ -117,10 +126,12 @@ async fn stream(
     if !betas.is_empty() {
         req = req.header("anthropic-beta", betas.join(","));
     }
-    let mut res = req
-        .send()
-        .await
-        .map_err(|e| err("network", format!("Couldn't reach Claude. Check your internet connection. ({e})")))?;
+    let mut res = req.send().await.map_err(|e| {
+        err(
+            "network",
+            format!("Couldn't reach Claude. Check your internet connection. ({e})"),
+        )
+    })?;
 
     let status = res.status();
     if !status.is_success() {
@@ -131,9 +142,18 @@ async fn stream(
             .unwrap_or(text);
         return Err(match status.as_u16() {
             401 | 403 => err("auth", "Claude rejected the API key. Check it with Ctrl+,."),
-            429 => err("rate_limit", "Too many requests right now. Wait a moment and try again."),
-            529 => err("overloaded", "Claude is busy right now. Try again in a moment."),
-            _ => err("api", format!("Claude API error {}: {detail}", status.as_u16())),
+            429 => err(
+                "rate_limit",
+                "Too many requests right now. Wait a moment and try again.",
+            ),
+            529 => err(
+                "overloaded",
+                "Claude is busy right now. Try again in a moment.",
+            ),
+            _ => err(
+                "api",
+                format!("Claude API error {}: {detail}", status.as_u16()),
+            ),
         });
     }
 
@@ -143,10 +163,12 @@ async fn stream(
         if cancelled.load(Ordering::Relaxed) {
             return Err(err("cancelled", "Stopped."));
         }
-        let chunk = res
-            .chunk()
-            .await
-            .map_err(|e| err("network", format!("The connection to Claude was interrupted. ({e})")))?;
+        let chunk = res.chunk().await.map_err(|e| {
+            err(
+                "network",
+                format!("The connection to Claude was interrupted. ({e})"),
+            )
+        })?;
         let Some(chunk) = chunk else { break };
         buf.extend_from_slice(&chunk);
         while let Some(end) = event_end(&buf) {

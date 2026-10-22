@@ -9,6 +9,7 @@ import "./outline";
 import "./annotate";
 import "./radial";
 import "./ai";
+import { checkForUpdates } from "./update";
 
 bindKeys();
 
@@ -24,4 +25,5 @@ initSettings()
   })
   .finally(() => {
     if (!getDoc()) showStartScreen();
+    checkForUpdates();
   });

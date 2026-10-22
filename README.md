@@ -4,7 +4,7 @@ A fast, keyboard-first PDF reader for Windows where **the page is the whole inte
 toolbar: everything appears only when you ask for it and disappears with `Esc`.
 
 Built with [Tauri 2](https://tauri.app) and [PDF.js](https://mozilla.github.io/pdf.js/).
-The installer is about 2.4 MB, and the installed app about 6.7 MB (it uses the WebView2 that ships with Windows).
+The installer is about 3 MB, and the installed app about 8.5 MB (it uses the WebView2 that ships with Windows).
 
 ## Features
 
@@ -99,16 +99,19 @@ reads are sent to Anthropic's API; the PDF file itself is never uploaded.
 
 ## Install
 
-Build the installers (see [Development](#development)) and run either one from
-`src-tauri/target/release/bundle/`:
-
-- `nsis/Minimal PDF_0.1.0_x64-setup.exe` (about 2.4 MB), or
-- `msi/Minimal PDF_0.1.0_x64_en-US.msi`
-
-When a release is published on the [Releases](https://github.com/mishbahul-hub/minimal-pdf/releases)
-page, you can download the installer from there instead. Windows 10 and 11 already include
-WebView2, which the app uses to draw its window. After installing, PDFs get an
+Download `Minimal PDF_<version>_x64-setup.exe` from the
+[Releases](https://github.com/mishbahul-hub/minimal-pdf/releases) page and run it. Windows 10 and 11
+already include WebView2, which the app uses to draw its window. After installing, PDFs get an
 "Open with Minimal PDF" option.
+
+**Updates:** the app checks for a new release a few seconds after it starts and offers
+"Install and restart". Nothing is downloaded without your click.
+
+Windows may show a SmartScreen warning ("unknown publisher") because the installer isn't code-signed
+yet: choose **More info → Run anyway**.
+
+To build the installers yourself, see [Development](#development); they end up in
+`src-tauri/target/release/bundle/` (`nsis/` and `msi/`).
 
 ## Where your data lives
 
@@ -133,6 +136,17 @@ npm run tauri build    # build the installers
 npx tsc --noEmit       # type-check
 ```
 
+### Publishing a release
+
+1. Bump the version in `src-tauri/tauri.conf.json`, `package.json` and `src-tauri/Cargo.toml`.
+2. Commit, then tag and push: `git tag v0.2.0 && git push origin v0.2.0`.
+3. The **Release** GitHub Action builds and signs the installers and creates a **draft** release.
+   Check it, then press **Publish**. Installed apps will offer the update.
+
+One-time setup: the repository needs a secret named `TAURI_SIGNING_PRIVATE_KEY` containing the
+updater private key (`%USERPROFILE%.tauriminimal-pdf.key`). Keep that file safe: without it,
+installed apps can't verify future updates.
+
 ### Project structure
 
 ```
@@ -146,6 +160,7 @@ src/
   outline.ts     table of contents sidebar
   annotate.ts    annotation tools, drawing, undo/redo, storage
   radial.ts      the right-click radial menu
+  update.ts      update check and install prompt
   ai.ts          Claude features: selection actions, chat (agentic RAG over the PDF), summaries
   styles.css     all styles and themes
 src-tauri/

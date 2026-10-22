@@ -1,6 +1,6 @@
 [package]
 name = "minimal-pdf"
-version = "0.1.0"
+version = "0.2.0"
 description = "Minimalist keyboard-first PDF reader"
 authors = ["islam"]
 edition = "2024"
@@ -38,3 +38,4 @@ strip = true
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-single-instance = "2"
+tauri-plugin-updater = "2"

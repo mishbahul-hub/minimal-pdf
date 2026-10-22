@@ -1369,8 +1369,37 @@ svg.ink text {
   color: var(--muted);
 }
 
+/* Update prompt (release builds) */
+#update {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px 8px 14px;
+  font-size: 13px;
+  animation: radial-pop 0.15s ease-out;
+}
+
+#update button {
+  padding: 4px 10px;
+  font: inherit;
+  color: var(--text);
+  background: var(--hover);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+#update button.install {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
 /* Stacking order of everything above the pages */
 #message { z-index: 5; }
-#indicator { z-index: 6; }
+#indicator, #update { z-index: 6; }
 #goto, #search { z-index: 10; }
 #help, #ai-key { z-index: 20; }
