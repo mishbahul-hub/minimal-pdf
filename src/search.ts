@@ -34,6 +34,7 @@ type Match = { page: number; start: number; end: number };
 const searchEl = document.querySelector<HTMLFormElement>("#search")!;
 const inputEl = document.querySelector<HTMLInputElement>("#search-input")!;
 const statusEl = document.querySelector<HTMLElement>("#search-status")!;
+const closeEl = document.querySelector<HTMLButtonElement>("#search-close")!;
 
 const indexCache = new Map<number, Promise<PageIndex>>();
 let matches: Match[] = [];
@@ -279,6 +280,7 @@ function closeSearch() {
 }
 
 searchEl.addEventListener("submit", (e) => e.preventDefault());
+closeEl.addEventListener("click", closeSearch);
 
 inputEl.addEventListener("input", () => {
   clearTimeout(typeTimer);

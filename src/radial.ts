@@ -8,15 +8,36 @@ const R_TOOLS = 66; // radius of the tool ring
 const R_OPTIONS = 120; // radius of the colour / size ring
 const EDGE = 150; // keep the whole menu inside the window
 
-const ICONS: Record<Tool, string> = {
-  pointer: '<path d="M6 3l12 9-5.5 1.2L15 19l-2.4 1.1-2.6-5.7L6 18z"/>',
-  pen: '<path d="M4 20l1.2-4.4L15.5 5.3a2 2 0 0 1 2.8 0l.4.4a2 2 0 0 1 0 2.8L8.4 18.8z"/><path d="M13.5 7.3l3.2 3.2"/>',
-  pencil: '<path d="M5 19l1-4.5L16 4.5l3.5 3.5-10 10z"/><path d="M14 6.5l3.5 3.5M5 19l3-.8"/>',
-  highlighter: '<path d="M9 13.5l-3.5 3.5V20h4.5l3.5-3.5"/><path d="M9 13.5L16.5 4l3.5 3.5L10.5 15z"/><path d="M4 20h4"/>',
-  eraser: '<path d="M15.5 4.5l4 4-9.5 9.5H6l-2.5-2.5z"/><path d="M10 9l5 5M12 18h8"/>',
-  rect: '<rect x="4" y="6" width="16" height="12" rx="1"/>',
-  ellipse: '<circle cx="12" cy="12" r="8"/>',
-  text: '<path d="M5 7V5h14v2M12 5v14M9 19h6"/>',
+/**
+ * Two-tone icons on a 24×24 grid: outline in the button's text colour, a soft tinted body, and one
+ * detail in the tool's current colour (`c`): the pen's nib hole, the pencil's tip, the highlighter's
+ * stroke, the shapes' fill, the text underline. So the ring also shows what each tool will draw with.
+ */
+const SOFT = 'fill="currentColor" fill-opacity="0.12"';
+const ICONS: Record<Tool, (c: string) => string> = {
+  pointer: () =>
+    `<path ${SOFT} d="M6.3 3.8 18 12.6c.5.4.3 1.2-.4 1.3l-4.5.7 2.5 5.1c.2.5 0 1-.4 1.2l-1.2.6c-.5.2-1 0-1.2-.5l-2.4-5.1-3.3 3c-.5.5-1.3.1-1.3-.6V4.3c0-.6.6-.9 1.1-.5z"/>`,
+  pen: (c) =>
+    `<path ${SOFT} d="M8.2 3.5h7.6l.9 6.8L12 20.5l-4.7-10.2z"/>` +
+    `<path d="M7.3 10.3h9.4M12 20.5v-6.4"/>` +
+    `<circle cx="12" cy="12.6" r="1.7" fill="${c}" stroke="none"/>`,
+  pencil: (c) =>
+    `<path ${SOFT} d="M15.9 3.4a1.5 1.5 0 0 1 2.1 0l2.6 2.6a1.5 1.5 0 0 1 0 2.1L9.2 19.5 4 20.5l1-5.2z"/>` +
+    `<path d="M14.2 5.2l4.6 4.6M5 15.3l4.2 4.2"/>` +
+    `<path d="M4 20.5l.6-3.1 2.5 2.5z" fill="${c}" stroke="${c}" stroke-width="1"/>`,
+  highlighter: (c) =>
+    `<path d="M3.5 20.6h10" stroke="${c}" stroke-width="3.2" opacity="0.95"/>` +
+    `<path ${SOFT} d="M17.9 2.9 21.1 6.1 13.1 14.1 9.9 10.9z"/>` +
+    `<path d="M9.9 10.9 13.1 14.1 10.3 16.9 7.1 13.7z" fill="${c}" fill-opacity="0.85"/>`,
+  eraser: () =>
+    `<path ${SOFT} d="M14.6 3.6a1.5 1.5 0 0 1 2.1 0l3.7 3.7a1.5 1.5 0 0 1 0 2.1L11 18.8 5.2 13z"/>` +
+    `<path d="M5.2 13 11 18.8l-1.2 1.2H7.2l-3-3a1.5 1.5 0 0 1 0-2.1z" fill="#f48fb1" fill-opacity="0.75"/>` +
+    `<path d="M13 20h7"/>`,
+  rect: (c) => `<rect x="4" y="5.5" width="16" height="13" rx="2.8" fill="${c}" fill-opacity="0.22"/>`,
+  ellipse: (c) => `<circle cx="12" cy="12" r="8.2" fill="${c}" fill-opacity="0.22"/>`,
+  text: (c) =>
+    `<path d="M6 7.2V5.5h12v1.7M12 5.5v11.5M9.6 17h4.8"/>` +
+    `<path d="M5.5 20.5h13" stroke="${c}" stroke-width="2.2"/>`,
 };
 
 const menu = document.createElement("div");
@@ -34,7 +55,7 @@ let selected: Tool = "pointer"; // tool whose options the outer ring shows
 let lastPointer: { x: number; y: number } | null = null;
 
 function icon(t: Tool) {
-  return `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[t]}</svg>`;
+  return `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[t](getStyle(t).color)}</svg>`;
 }
 
 function place(el: HTMLElement, angleDeg: number, radius: number) {
@@ -79,7 +100,10 @@ menu.addEventListener("pointerleave", () => showOptions(selected));
 /** Mark the active tool and show the current colour in the middle. */
 function refresh() {
   const active = getTool();
-  menu.querySelectorAll<HTMLElement>(".tool").forEach((b) => b.classList.toggle("active", b.dataset.tool === active));
+  menu.querySelectorAll<HTMLElement>(".tool").forEach((b) => {
+    b.classList.toggle("active", b.dataset.tool === active);
+    b.innerHTML = icon(b.dataset.tool as Tool); // icons show each tool's current colour
+  });
   const center = menu.querySelector<HTMLElement>(".center")!;
   const s = getStyle(active);
   center.innerHTML = active === "pointer" || active === "eraser" ? icon(active) : `<span class="dot" style="background:${s.color}"></span>`;
@@ -124,7 +148,7 @@ function showOptions(t: Tool, force = false) {
     }
     b.addEventListener("click", () => {
       colorInput.value = style.color;
-      colorInput.oninput = () => void setStyle(t, { color: colorInput.value });
+      colorInput.oninput = () => void setStyle(t, { color: colorInput.value }).then(refresh);
       colorInput.onchange = () => {
         if (getTool() !== t) setTool(t);
         closeRadial();

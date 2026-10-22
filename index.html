@@ -30,8 +30,11 @@
     </form>
 
     <form id="search" class="panel" hidden>
-      <input id="search-input" type="search" placeholder="Search" autocomplete="off" spellcheck="false" />
+      <input id="search-input" type="text" placeholder="Search" autocomplete="off" spellcheck="false" />
       <span id="search-status" aria-live="polite"></span>
+      <button id="search-close" type="button" title="Close search (Esc)" aria-label="Close search">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+      </button>
     </form>
 
     <nav id="outline" class="panel" hidden aria-label="Table of contents">

@@ -308,7 +308,10 @@ type Gesture = { pointerId: number } & (
   | { kind: "shape"; n: number; ann: Shape; el: SVGElement; x0: number; y0: number }
   | { kind: "erase"; n: number; removed: Item[]; lastX: number; lastY: number }
   | { kind: "text"; n: number; x: number; y: number }
+  | { kind: "move"; n: number; note: Note; el: SVGElement | null; x0: number; y0: number; dx: number; dy: number; moved: boolean }
 );
+
+const MOVE_THRESHOLD = 3; // page units of drag before a press on a comment becomes a move
 
 let gesture: Gesture | null = null;
 
@@ -330,9 +333,24 @@ scroller.addEventListener("pointerdown", (e) => {
     commitEditor();
     if (tool === "text" || tool === "pointer") return; // a click outside the editor just finishes it
   }
-  if (tool === "pointer" || (e.pointerType === "mouse" && e.button !== 0)) return;
+  if (e.pointerType === "mouse" && e.button !== 0) return;
   const hit = pageAt(e);
-  if (!hit) return;
+
+  // With no tool or the text tool, pressing on a comment grabs it: dragging moves it.
+  if (hit && (tool === "pointer" || tool === "text")) {
+    const p = toPage(hit.el, hit.n, e);
+    const note = noteAt(hit.n, p.x, p.y);
+    if (note) {
+      e.preventDefault(); // don't start a text selection underneath
+      const el = layerFor(hit.n, false)?.querySelector<SVGElement>(`[data-id="${note.id}"]`) ?? null;
+      // The pointer is only captured once it actually drags (see pointermove), so a plain click or
+      // double-click keeps its normal target (double-click edits the comment).
+      gesture = { pointerId: e.pointerId, kind: "move", n: hit.n, note, el, x0: p.x, y0: p.y, dx: 0, dy: 0, moved: false };
+      return;
+    }
+  }
+
+  if (tool === "pointer" || !hit) return;
   e.preventDefault();
   const { x, y } = toPage(hit.el, hit.n, e);
   const s = getStyle(tool);
@@ -360,6 +378,21 @@ scroller.addEventListener("pointermove", (e) => {
   // Only the pointer that started the stroke draws (a resting palm or second pointer is ignored).
   if (!gesture || gesture.kind === "text" || e.pointerId !== gesture.pointerId) return;
   const el = getPageElement(gesture.n)!;
+  if (gesture.kind === "move") {
+    const { x, y } = toPage(el, gesture.n, e);
+    const dx = x - gesture.x0;
+    const dy = y - gesture.y0;
+    if (!gesture.moved && Math.hypot(dx, dy) < MOVE_THRESHOLD) return;
+    if (!gesture.moved) {
+      scroller.classList.add("moving-note");
+      scroller.setPointerCapture(e.pointerId);
+    }
+    gesture.moved = true;
+    gesture.dx = dx;
+    gesture.dy = dy;
+    gesture.el?.setAttribute("transform", `translate(${dx} ${dy})`);
+    return;
+  }
   // Coalesced events give every sample the pointer produced since the last frame: smoother ink.
   const samples = gesture.kind === "ink" ? (e.getCoalescedEvents?.() ?? [e]) : [e];
   for (const ev of samples.length ? samples : [e]) {
@@ -397,6 +430,7 @@ function endGesture(e: PointerEvent) {
   gesture = null;
   if (!g) return;
   if (scroller.hasPointerCapture(e.pointerId)) scroller.releasePointerCapture(e.pointerId);
+  scroller.classList.remove("moving-note");
   if (g.kind === "ink") {
     g.el.remove();
     commit({ added: [{ page: g.n, ann: g.ann, index: pages.get(g.n)?.length ?? 0 }], removed: [] });
@@ -409,6 +443,14 @@ function endGesture(e: PointerEvent) {
       undoStack.push({ added: [], removed: g.removed });
       redoStack = [];
       void saveNotes();
+    }
+  } else if (g.kind === "move") {
+    if (g.moved) {
+      const index = (pages.get(g.n) ?? []).findIndex((a) => a.id === g.note.id);
+      const moved: Note = { ...g.note, x: r2(g.note.x + g.dx), y: r2(g.note.y + g.dy) };
+      commit({ removed: [{ page: g.n, ann: g.note, index }], added: [{ page: g.n, ann: moved, index }] });
+    } else if (tool === "text") {
+      openEditor(g.n, g.note, false); // a click (no drag) with the text tool edits it
     }
   } else if (g.kind === "text") {
     const existing = noteAt(g.n, g.x, g.y);
@@ -544,7 +586,38 @@ function openEditor(n: number, note: Note, isNew: boolean) {
   del.className = "note-delete";
   del.title = "Delete comment";
   del.textContent = "Delete";
-  bar.append(font, fontSize, colors, del);
+  const grip = document.createElement("span");
+  grip.className = "note-grip";
+  grip.title = "Drag to move";
+  grip.innerHTML =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/></svg>';
+  bar.append(grip, font, fontSize, colors, del);
+
+  // Drag the grip to move the comment while editing (saved with the edit).
+  grip.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    grip.setPointerCapture(e.pointerId);
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const x0 = working.x;
+    const y0 = working.y;
+    const k = page.getBoundingClientRect().width / size.width; // screen px per page unit
+    const onMove = (ev: PointerEvent) => {
+      working.x = r2(x0 + (ev.clientX - startX) / k);
+      working.y = r2(y0 + (ev.clientY - startY) / k);
+      wrap.style.left = `${(working.x / size.width) * 100}%`;
+      wrap.style.top = `${(working.y / size.height) * 100}%`;
+    };
+    const onUp = () => {
+      grip.removeEventListener("pointermove", onMove);
+      grip.removeEventListener("pointerup", onUp);
+      grip.removeEventListener("pointercancel", onUp);
+      area.focus();
+    };
+    grip.addEventListener("pointermove", onMove);
+    grip.addEventListener("pointerup", onUp);
+    grip.addEventListener("pointercancel", onUp);
+  });
 
   const area = document.createElement("textarea");
   area.value = working.text;

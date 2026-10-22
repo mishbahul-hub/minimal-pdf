@@ -70,6 +70,9 @@ body {
 .page {
   flex: none;
   position: relative; /* text layer and annotation layer sit on top of the canvas */
+  /* Keep the page's layers (text z-index 1, ink 2, editor 4) inside the page, so they can
+     never cover the overlays (search bar, go-to box, help, menus). */
+  isolation: isolate;
   margin: 0 auto;
   background: var(--page-bg);
   box-shadow: var(--page-shadow);
@@ -557,10 +560,12 @@ svg.ink text {
 }
 
 /* With no tool, comments can be double-clicked to edit them. */
+/* With no tool or the text tool, comments can be dragged to move them (and double-clicked to edit). */
 #pages[data-tool="pointer"] svg.ink text,
+#pages[data-tool="text"] svg.ink text,
 #pages:not([data-tool]) svg.ink text {
   pointer-events: auto;
-  cursor: pointer;
+  cursor: move;
 }
 
 /* A tool is active: draw instead of selecting text or panning with touch. */
@@ -568,19 +573,60 @@ svg.ink text {
   pointer-events: none;
 }
 
+/* The cursor is set on #pages as well as the pages: while drawing, the pointer is captured by
+   #pages, and the cursor comes from the capturing element. Without this it falls back to the arrow. */
+#pages[data-tool]:not([data-tool="pointer"]),
 #pages[data-tool]:not([data-tool="pointer"]) .page {
   cursor: var(--tool-cursor, crosshair);
+}
+
+#pages[data-tool]:not([data-tool="pointer"]) .page {
   touch-action: none;
   user-select: none;
 }
 
+#pages[data-tool="text"],
 #pages[data-tool="text"] .page {
   cursor: text;
 }
 
+#pages[data-tool="rect"],
 #pages[data-tool="rect"] .page,
+#pages[data-tool="ellipse"],
 #pages[data-tool="ellipse"] .page {
   cursor: crosshair;
+}
+
+/* While a comment is being dragged */
+#pages.moving-note,
+#pages.moving-note * {
+  cursor: move !important;
+}
+
+.note-grip {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  color: var(--muted);
+  cursor: move;
+  touch-action: none;
+}
+
+.note-grip:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.note-grip svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 /* Text comment editor (on the page) */
@@ -816,3 +862,39 @@ svg.ink text {
   opacity: 0;
   pointer-events: none;
 }
+
+/* Close button on the search bar */
+#search-close {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+#search-close:hover,
+#search-close:focus-visible {
+  color: var(--text);
+  background: var(--hover);
+  outline: none;
+}
+
+#search-close svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+
+/* Stacking order of everything above the pages */
+#message { z-index: 5; }
+#indicator { z-index: 6; }
+#goto, #search { z-index: 10; }
+#help { z-index: 20; }
