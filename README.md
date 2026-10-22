@@ -1,40 +1,132 @@
-# PDF Reader Project
+# Minimal PDF
 
-> A PDF reader application. *(Work in progress. Update this section as the project takes shape.)*
+A fast, keyboard-first PDF reader for Windows where **the page is the whole interface**. There's no
+toolbar: everything appears only when you ask for it and disappears with `Esc`.
 
-## Overview
+Built with [Tauri 2](https://tauri.app) and [PDF.js](https://mozilla.github.io/pdf.js/).
+The installer is about 2 MB, and the installed app about 5.5 MB (it uses the WebView2 that ships with Windows).
 
-Describe what the PDF reader does and who it's for. For example:
+## Features
 
-- Open and view PDF files
-- Search text inside documents
-- Extract text or images
-- Bookmarks / annotations
+- **Opens instantly, stays fast.** Only the pages on screen are drawn, so a 500-page PDF scrolls
+  as smoothly as a 5-page one.
+- **Keyboard first.** Read a whole document without touching the mouse (press `?` in the app for
+  every shortcut).
+- **Zoom that keeps your place.** Ctrl + mouse wheel, trackpad pinch, or `+` / `−`; fit width and
+  fit page with `w`.
+- **Search** (`/`): case-insensitive, finds phrases across line breaks, highlights every match.
+- **Table of contents** (`t`): a slide-in sidebar from the PDF's bookmarks.
+- **Light, dark and sepia themes** (`d`).
+- **Remembers where you were.** Every PDF reopens on the same page and zoom; recent files are
+  on the start screen (press `1`–`9`).
+- **Annotations without a toolbar.** Right-click anywhere on a page for a radial menu around your
+  cursor with pen, pencil, highlighter, eraser, rectangle, circle and text comments.
+- **Never modifies your PDFs.** Annotations and settings are stored separately (see
+  [Where your data lives](#where-your-data-lives)).
+- Opens PDFs by double-click once installed, and reuses the open window.
 
-## Tech Stack
+## Annotations: the right-click menu
 
-*To be decided* (e.g. Python + PyMuPDF, Electron + PDF.js, React + pdf.js, etc.)
+Right-click on a page (or press `a`) and a ring of tools appears around the cursor:
 
-## Getting Started
+- **Inner ring:** pointer (back to reading and selecting text), pen, pencil, highlighter, eraser,
+  rectangle, circle, text comment.
+- **Outer ring:** colours and three sizes for the tool under your cursor, plus a rainbow button for
+  **any colour you like**. The highlighter comes with light, see-through colours (yellow, green,
+  blue, pink, orange, lavender) so the text underneath stays readable.
+
+While a tool is active:
+
+| Action | How |
+|---|---|
+| Draw / highlight | Drag on the page |
+| Straight line, square, perfect circle | Hold `Shift` while dragging |
+| Erase | Eraser tool: drag over a mark to remove it |
+| Add a comment | Text tool: click where it should go, then type |
+| Change a comment's font, size or colour | Use the small bar above the comment while typing |
+| Edit an existing comment | Double-click it (with no tool active) |
+| Finish a comment | `Esc`, `Ctrl+Enter`, or click elsewhere |
+| Undo / redo | `Ctrl+Z` / `Ctrl+Y` |
+| Put the tool down | `Esc` |
+
+Inside the open menu, `1`–`8` pick a tool and `Esc` closes it.
+
+## Keyboard shortcuts
+
+| Key | Action |
+|---|---|
+| `Ctrl+O` | Open a file |
+| `j` / `k`, `↓` / `↑` | Scroll a little |
+| `Space` / `Shift+Space` | Next / previous screen |
+| `n` / `p`, `→` / `←` | Next / previous page |
+| `g g` / `G` | First / last page |
+| `Ctrl+G` | Go to a page number |
+| `+` / `−` / `0` | Zoom in / out / 100% |
+| `w` | Fit width ↔ fit page |
+| `f` or `F11` | Fullscreen |
+| `d` | Light → dark → sepia |
+| `/` or `Ctrl+F` | Search (`Enter` / `Shift+Enter`, or `n` / `N`, for next / previous match) |
+| `t` | Table of contents |
+| `a` or right-click | Annotation tools |
+| `Ctrl+Z` / `Ctrl+Y` | Undo / redo annotations |
+| `1`–`9` | Open a recent file (start screen) |
+| `?` | Show all shortcuts |
+| `Esc` | Close whatever is open / put the tool down / leave fullscreen |
+
+## Install
+
+Build the installers (see [Development](#development)) and run either one from
+`src-tauri/target/release/bundle/`:
+
+- `nsis/Minimal PDF_0.1.0_x64-setup.exe` (about 2 MB), or
+- `msi/Minimal PDF_0.1.0_x64_en-US.msi`
+
+When a release is published on the [Releases](https://github.com/mishbahul-hub/minimal-pdf/releases)
+page, you can download the installer from there instead. Windows 10 and 11 already include
+WebView2, which the app uses to draw its window. After installing, PDFs get an
+"Open with Minimal PDF" option.
+
+## Where your data lives
+
+Everything the app saves is in `%APPDATA%\com.islam.minimalpdf\`:
+
+- `settings.json`: theme, recent files, the last position in each file, annotation tool styles
+- `notes-<id>.json`: the annotations for one PDF (the file's path is stored inside it)
+
+Your PDF files are only ever read, never written.
+
+## Development
+
+**Prerequisites:** [Rust](https://rustup.rs), [Node.js](https://nodejs.org) LTS, and on Windows the
+Microsoft C++ Build Tools ("Desktop development with C++").
 
 ```bash
-# 1. Clone / open the project
-cd "pdf reader project"
-
-# 2. Install dependencies
-#    (add the command once a stack is chosen, e.g. `pip install -r requirements.txt` or `npm install`)
-
-# 3. Run the app
-#    (add the run command here)
+npm install
+npm run tauri dev      # run with hot reload
+npm run tauri build    # build the installers
+npx tsc --noEmit       # type-check
 ```
 
-## Project Structure
+### Project structure
 
 ```
-pdf reader project/
-├── README.md        # This file
-└── ...              # Source files go here
+src/
+  main.ts        start-up wiring (keys, settings, launch file)
+  viewer.ts      loading, lazy page rendering, text layer, zoom, navigation
+  keys.ts        the single keymap (the ? help is generated from it)
+  overlays.ts    go-to-page box, help overlay, Esc handling
+  settings.ts    theme, saved positions, recent files
+  search.ts      text search and highlights
+  outline.ts     table of contents sidebar
+  annotate.ts    annotation tools, drawing, undo/redo, storage
+  radial.ts      the right-click radial menu
+  styles.css     all styles and themes
+src-tauri/
+  src/lib.rs     window sizing, launch file, single instance, recent-file access
+  tauri.conf.json, capabilities/default.json
 ```
+
+`CLAUDE.md` holds the detailed design notes and conventions.
 
 ---
 

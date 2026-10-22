@@ -33,6 +33,21 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "fileAssociations": [
+      {
+        "ext": [
+          "pdf"
+        ],
+        "name": "PDF Document",
+        "description": "PDF document",
+        "role": "Viewer",
+        "mimeType": "application/pdf"
+      }
+    ],
+    "shortDescription": "Minimalist keyboard-first PDF reader",
+    "longDescription": "A fast, keyboard-first PDF reader where the page is the whole interface, with search, a table of contents, themes and annotations.",
+    "publisher": "islam",
+    "category": "Productivity"
   }
 }

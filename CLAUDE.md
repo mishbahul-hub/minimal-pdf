@@ -3,7 +3,7 @@
 Minimalist, keyboard-first desktop PDF reader built with **Tauri 2 + vanilla TypeScript + PDF.js**.
 The page is the whole interface. Targets: opens instantly, stays out of the way, installer under ~10 MB.
 
-**Current stage: 6 (Polish, test and ship).** Stages 0–5 and annotations done. Update this line when a stage's "done when" check passes.
+**Status: v1 complete.** Stages 0–6 and annotations done. Next: stretch goals (below), only when asked. Update this line when a stage's "done when" check passes.
 
 ## Design principles (do not violate)
 
@@ -83,6 +83,8 @@ Keep each concern in its own module as above. Don't create new top-level modules
 - **Keyboard**: all shortcuts in `KEYMAP` in `keys.ts`. Key names come from `keyName()`: `Ctrl+o`, `j`, `G`, `?`, `Space`, `Shift+Space`, `ArrowDown`; Shift is only spelled out for non-printable keys; a space separates sequences (`g g`, 500 ms timeout). Ignore shortcuts while focus is in an input; inputs handle their own Enter/Esc explicitly (don't rely on implicit form submission). Bindings without `repeat: true` ignore key auto-repeat. Esc closes the top overlay, otherwise leaves fullscreen. The `?` help overlay is generated from the keymap; never hand-maintain a separate list. Stage 4/5 keys (`d`, `/`, `t`) get added to `KEYMAP` when their features land.
 - **Navigation**: next/previous page are relative to the page at the top edge of the view (not the centre-based current page); `goToPage` aligns the page top with `FIT_PADDING` of space.
 - **Window**: starts hidden (`visible: false`); `lib.rs` shrinks it to the monitor work area if the 900×1100 default doesn't fit, centres it, then shows it.
+- **Launch file / single instance**: `lib.rs` takes the first existing `.pdf` argument (relative paths resolved against the cwd), allows it in the fs scope and keeps it until the frontend calls `take_launch_file`. The single-instance plugin (registered first) forwards a second launch's PDF as an `open-file` event and focuses the window. `bundle.fileAssociations` registers `.pdf` ("Open with Minimal PDF"). Icons are generated from `app-icon.png` with `npm run tauri icon app-icon.png` (desktop sizes only; mobile icon folders are deleted).
+- **Release build**: `npm run tauri build` → NSIS ~2 MB, MSI ~2.7 MB, exe ~5.4 MB.
 - **Testing in the running app**: launch with `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222` and drive it over the DevTools protocol (`Runtime.evaluate` with `import("/src/viewer.ts")`, `Input.dispatchKeyEvent`, `Page.captureScreenshot`). Don't use the window during a run; real input skews results.
 - **Themes**: colours as CSS variables on `:root`, overridden per `:root[data-theme=…]`. The page filter (`--page-filter`: dark `invert(1) hue-rotate(180deg)`, sepia `sepia(0.35) brightness(0.95)`) applies to the canvas only, so annotations keep their real colours. First launch follows `prefers-color-scheme`, then persists the user's choice (store + a localStorage mirror so it applies before the store loads).
 - **viewer events**: `viewer.events` (EventTarget) emits `open` (DocInfo), `close`, `pagechange`, `scroll`, `pagerender`, `pagefree`, `openfailed`. Feature modules (settings, search, outline, annotations) listen instead of being called from viewer.ts.
