@@ -14,8 +14,9 @@ import {
   exitFullscreen,
 } from "./viewer";
 import { closeTopOverlay, openGoTo, toggleHelp } from "./overlays";
+import { cycleTheme, openRecent } from "./settings";
 
-type Action = () => void | Promise<void>;
+type Action = (e: KeyboardEvent) => void | Promise<unknown>;
 
 export type Binding = {
   /** Key names as produced by keyName(); a space separates a two-key sequence ("g g"). */
@@ -45,6 +46,13 @@ export const KEYMAP: Binding[] = [
   { keys: ["0", "Ctrl+0"], label: "0", help: "Reset zoom to 100%", action: resetZoom },
   { keys: ["w"], label: "w", help: "Toggle fit width / fit page", action: toggleFit },
   { keys: ["f", "F11"], label: "f / F11", help: "Fullscreen", action: toggleFullscreen },
+  { keys: ["d"], label: "d", help: "Cycle theme (light, dark, sepia)", action: cycleTheme },
+  {
+    keys: ["1", "2", "3", "4", "5", "6", "7", "8", "9"],
+    label: "1–9",
+    help: "Open a recent file (start screen)",
+    action: (e) => openRecent(Number(e.key)),
+  },
   { keys: ["?"], label: "?", help: "Show shortcut help", action: () => toggleHelp(KEYMAP) },
   { keys: ["Escape"], label: "Esc", help: "Close overlay / leave fullscreen", action: escape },
 ];
@@ -116,6 +124,6 @@ export function bindKeys(keymap: Binding[] = KEYMAP) {
 
     e.preventDefault();
     if (e.repeat && !binding.repeat) return;
-    void binding.action();
+    void binding.action(e);
   });
 }

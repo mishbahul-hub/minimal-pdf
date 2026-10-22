@@ -65,8 +65,39 @@ new ResizeObserver(onResize).observe(scroller);
 // Fires when the window moves to a screen with a different scale factor.
 window.addEventListener("resize", () => pump());
 
+/**
+ * Viewer events for other modules (settings, search, outline, annotations):
+ * - "open"        detail: DocInfo        a document finished loading and is laid out
+ * - "close"                              the current document was closed (another open or an error)
+ * - "pagechange"  detail: number         the current page changed
+ * - "scroll"                             the view scrolled or zoomed (for saving the position)
+ * - "pagerender"  detail: PageRender     a page's canvas (and text layer) was rendered
+ * - "pagefree"    detail: number         a page's canvas and text layer were freed
+ * - "openfailed"  detail: { key }        a file could not be read (e.g. a missing recent file)
+ */
+export const events = new EventTarget();
+
+export type DocInfo = { key: string; name: string; size: number; pageCount: number };
+
+function emit(type: string, detail?: unknown) {
+  events.dispatchEvent(new CustomEvent(type, { detail }));
+}
+
+let doc: DocInfo | null = null;
+
+export function getDoc() {
+  return doc;
+}
+
+// Extra content (the recent-files list) shown under the start message; set by settings.ts.
+let startExtras: () => Node | null = () => null;
+
+export function setStartExtras(fn: () => Node | null) {
+  startExtras = fn;
+}
+
 export function showStartScreen() {
-  showMessage(START_MESSAGE);
+  showMessage(START_MESSAGE, startExtras());
 }
 
 /** Ctrl+O: pick a PDF with the native dialog and show it. */
@@ -82,22 +113,30 @@ export async function openPdf() {
     console.error(err);
     return;
   }
-  if (!path) return;
+  if (path) await openPath(path);
+}
 
+/** Open a PDF by path. The path must already be in the fs scope (dialog pick, allowed recent or launch file). */
+export async function openPath(path: string): Promise<boolean> {
   const name = fileName(path);
   let data: Uint8Array;
   try {
     data = await readFile(path);
   } catch (err) {
     console.error(err);
-    await showError(name, "the file could not be read.");
-    return;
+    emit("openfailed", { key: path });
+    await showError(name, "the file could not be read. It may have been moved or deleted.");
+    return false;
   }
-  await openBytes(data, name);
+  return openBytes(data, name, path);
 }
 
-/** Load PDF bytes and lay out placeholders for every page. Split out from openPdf so it can be driven without the dialog. */
-export async function openBytes(data: Uint8Array, name: string) {
+/**
+ * Load PDF bytes and lay out placeholders for every page. Split out from openPath so it can be
+ * driven without the dialog. `key` identifies the file for saved positions and annotations.
+ */
+export async function openBytes(data: Uint8Array, name: string, key = name): Promise<boolean> {
+  const size = data.byteLength;
   const id = ++loadId;
   await closeCurrent();
   const task = pdfjs.getDocument({ data });
@@ -110,16 +149,16 @@ export async function openBytes(data: Uint8Array, name: string) {
       Array.from({ length: pdf.numPages }, (_, i) => pdf.getPage(i + 1)),
     );
   } catch (err) {
-    if (id !== loadId) return;
+    if (id !== loadId) return false;
     console.error(err);
     await showError(name, describeLoadError(err));
-    return;
+    return false;
   }
-  if (id !== loadId) return;
+  if (id !== loadId) return false;
 
   hideMessage();
   await setTitle(`${name} — ${APP_NAME}`);
-  if (id !== loadId) return;
+  if (id !== loadId) return false;
 
   slots = pages.map((page, i) => {
     const vp = page.getViewport({ scale: CSS_UNITS });
@@ -147,6 +186,51 @@ export async function openBytes(data: Uint8Array, name: string) {
   scroller.append(frag);
   for (const s of slots) observer.observe(s.el);
   showIndicator(pageLabel());
+
+  doc = { key, name, size, pageCount: slots.length };
+  emit("open", doc);
+  return true;
+}
+
+export function getPdfPage(n: number): pdfjs.PDFPageProxy | undefined {
+  return slots[n - 1]?.page;
+}
+
+/** The page element for page n (for overlays such as annotations). */
+export function getPageElement(n: number): HTMLDivElement | undefined {
+  return slots[n - 1]?.el;
+}
+
+/** Page size in CSS px at zoom 1. */
+export function getPageSize(n: number): { width: number; height: number } | undefined {
+  const s = slots[n - 1];
+  return s && { width: s.baseW, height: s.baseH };
+}
+
+// ---------------------------------------------------------------------------
+// Reading position (saved per file by settings.ts)
+
+export type Position = { page: number; offset: number; zoom: number; mode: ZoomMode };
+
+/** Page at the top of the view, how far down it the view starts (0–1), and the zoom. */
+export function getPosition(): Position | null {
+  const s = topSlot();
+  if (!s) return null;
+  const offset = (scroller.scrollTop + FIT_PADDING - s.el.offsetTop) / s.el.offsetHeight;
+  return { page: s.n, offset: Math.min(1, Math.max(0, offset)), zoom, mode: zoomMode };
+}
+
+/** Restore zoom first, then scroll to the saved page and offset. */
+export function setPosition(pos: Position) {
+  if (!slots.length) return;
+  const n = Math.min(slots.length, Math.max(1, Math.round(pos.page)));
+  currentPage = n;
+  zoomMode = pos.mode;
+  zoom = pos.mode === "custom" ? Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, pos.zoom)) : fitZoom(pos.mode);
+  applySizes();
+  const el = slots[n - 1].el;
+  scroller.scrollTop = el.offsetTop + pos.offset * el.offsetHeight - FIT_PADDING;
+  pump();
 }
 
 // ---------------------------------------------------------------------------
@@ -257,8 +341,10 @@ function onScroll() {
     if (n !== currentPage) {
       currentPage = n;
       pump();
+      emit("pagechange", n);
     }
     showIndicator(pageLabel());
+    emit("scroll");
   });
 }
 
@@ -354,7 +440,8 @@ export async function exitFullscreen() {
   }
 }
 
-function showIndicator(text: string) {
+/** Briefly show a short status ("12 / 340", "150%", "Dark theme") in the corner. */
+export function showIndicator(text: string) {
   indicatorEl.textContent = text;
   indicatorEl.classList.add("shown");
   clearTimeout(indicatorTimer);
@@ -418,6 +505,7 @@ export function setZoom(next: number, mode: ZoomMode, focus?: { x: number; y: nu
     pump();
   }, SETTLE_MS);
   showIndicator(`${Math.round(zoom * 100)}%`);
+  emit("scroll");
 }
 
 function fitZoom(mode: ZoomMode): number {
@@ -429,6 +517,8 @@ function fitZoom(mode: ZoomMode): number {
 }
 
 function applySizes() {
+  // Text layers (and anything else sized in PDF units) scale with this variable, without re-rendering.
+  scroller.style.setProperty("--total-scale-factor", String(zoom * CSS_UNITS));
   for (const s of slots) {
     s.el.style.width = `${s.baseW * zoom}px`;
     s.el.style.height = `${s.baseH * zoom}px`;
@@ -482,10 +572,14 @@ async function showError(name: string, reason: string) {
   loadId++;
   await closeCurrent();
   await setTitle(APP_NAME);
-  showMessage(`Couldn't open ${name}: ${reason}\n\n${START_MESSAGE}`);
+  showMessage(`Couldn't open ${name}: ${reason}\n\n${START_MESSAGE}`, startExtras());
 }
 
 async function closeCurrent() {
+  if (doc) {
+    doc = null;
+    emit("close");
+  }
   observer.disconnect();
   for (const s of slots) {
     s.task?.cancel();
@@ -503,8 +597,11 @@ async function closeCurrent() {
   await task?.destroy();
 }
 
-function showMessage(text: string) {
-  messageEl.textContent = text;
+function showMessage(text: string, extra: Node | null = null) {
+  const p = document.createElement("p");
+  p.textContent = text;
+  messageEl.replaceChildren(p);
+  if (extra) messageEl.append(extra);
   messageEl.hidden = false;
 }
 

@@ -1,6 +1,11 @@
 import "./styles.css";
 import { bindKeys } from "./keys";
-import { showStartScreen } from "./viewer";
+import { getDoc, showStartScreen } from "./viewer";
+import { initSettings } from "./settings";
 
-showStartScreen();
 bindKeys();
+initSettings()
+  .catch((err) => console.error(err))
+  .finally(() => {
+    if (!getDoc()) showStartScreen();
+  });

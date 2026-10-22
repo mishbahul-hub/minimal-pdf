@@ -1,14 +1,47 @@
+/* Themes: settings.ts sets data-theme on <html> (light, dark, sepia). */
 :root {
   --bg: #e9e9e7;
   --text: #1f1f1f;
   --muted: #6b6b68;
+  --page-bg: #fff;
   --page-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
   --panel-bg: #fbfbfa;
   --panel-border: #d4d4d0;
+  --hover: rgba(0, 0, 0, 0.06);
   --accent: #3b6fd8;
+  --page-filter: none;
+  color-scheme: light;
   font-family: system-ui, sans-serif;
   color: var(--text);
   background-color: var(--bg);
+}
+
+:root[data-theme="dark"] {
+  --bg: #1b1b1d;
+  --text: #e4e4e6;
+  --muted: #9a9aa0;
+  --page-bg: #232325;
+  --page-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  --panel-bg: #2a2a2e;
+  --panel-border: #3e3e44;
+  --hover: rgba(255, 255, 255, 0.08);
+  --accent: #7aa2ff;
+  /* White paper becomes dark; hue-rotate keeps images and diagrams close to their real colours. */
+  --page-filter: invert(1) hue-rotate(180deg);
+  color-scheme: dark;
+}
+
+:root[data-theme="sepia"] {
+  --bg: #e6dcc6;
+  --text: #3b3024;
+  --muted: #7a6a55;
+  --page-bg: #f4ecd8;
+  --page-shadow: 0 1px 3px rgba(80, 60, 30, 0.25);
+  --panel-bg: #f6efdf;
+  --panel-border: #d6c9ac;
+  --hover: rgba(80, 60, 30, 0.08);
+  --accent: #9a6b2f;
+  --page-filter: sepia(0.35) brightness(0.95);
 }
 
 html,
@@ -36,16 +69,19 @@ body {
    overflows to the right and stays scrollable instead of being clipped on the left. */
 .page {
   flex: none;
+  position: relative; /* text layer and annotation layer sit on top of the canvas */
   margin: 0 auto;
-  background: #fff;
+  background: var(--page-bg);
   box-shadow: var(--page-shadow);
 }
 
-/* Fill the page box, so after a zoom the old canvas stretches until it is re-rendered. */
+/* Fill the page box, so after a zoom the old canvas stretches until it is re-rendered.
+   Only the canvas gets the theme filter; annotations keep their real colours. */
 .page canvas {
   display: block;
   width: 100%;
   height: 100%;
+  filter: var(--page-filter);
 }
 
 #indicator {
@@ -71,8 +107,11 @@ body {
 #message {
   position: fixed;
   inset: 0;
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
   padding: 24px;
   color: var(--muted);
   text-align: center;
@@ -83,6 +122,72 @@ body {
 
 #message[hidden] {
   display: none;
+}
+
+#message p {
+  margin: 0;
+}
+
+/* Recent files on the start screen */
+.recents {
+  pointer-events: auto;
+  width: min(520px, 100%);
+  text-align: left;
+}
+
+.recents h2 {
+  margin: 0 0 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.recents ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.recents button {
+  display: grid;
+  grid-template-columns: 1.4em minmax(0, auto) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.recents button:hover,
+.recents button:focus-visible {
+  background: var(--hover);
+  outline: none;
+}
+
+.recents .num {
+  color: var(--muted);
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12px;
+}
+
+.recents .name,
+.recents .dir {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.recents .dir {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 /* ---- Overlays (go-to box, help) ---- */

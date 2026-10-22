@@ -1,4 +1,6 @@
-use tauri::{Manager, PhysicalSize, WebviewWindow};
+use tauri::{AppHandle, Manager, PhysicalSize, WebviewWindow};
+use tauri_plugin_fs::FsExt;
+use tauri_plugin_store::StoreExt;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -6,6 +8,7 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
+        .invoke_handler(tauri::generate_handler![allow_recent])
         .setup(|app| {
             // The window starts hidden (tauri.conf.json) so it can be resized before it appears.
             if let Some(win) = app.get_webview_window("main") {
@@ -16,6 +19,24 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+/// Let the frontend read a recent file from an earlier session. Files picked in the dialog are
+/// allowed automatically, but that permission doesn't survive a restart. Only paths already in
+/// the saved recent list are allowed, so this can't be used to read arbitrary files.
+#[tauri::command]
+fn allow_recent(app: AppHandle, path: String) -> Result<(), String> {
+    let store = app.store("settings.json").map_err(|e| e.to_string())?;
+    let known = store
+        .get("recent")
+        .and_then(|v| v.as_array().cloned())
+        .unwrap_or_default()
+        .iter()
+        .any(|r| r.get("path").and_then(|p| p.as_str()) == Some(path.as_str()));
+    if !known {
+        return Err("not a recent file".into());
+    }
+    app.fs_scope().allow_file(&path).map_err(|e| e.to_string())
 }
 
 /// The default size can be taller than the screen (e.g. 1080p at high scaling):
