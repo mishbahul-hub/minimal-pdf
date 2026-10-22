@@ -2,6 +2,8 @@ import "./styles.css";
 import { bindKeys } from "./keys";
 import { getDoc, showStartScreen } from "./viewer";
 import { initSettings } from "./settings";
+import "./search";
+import "./outline";
 
 bindKeys();
 initSettings()

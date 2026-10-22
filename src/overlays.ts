@@ -5,11 +5,12 @@ import type { Binding } from "./keys";
 type Overlay = { el: HTMLElement; close: () => void };
 const open: Overlay[] = [];
 
-function push(el: HTMLElement, close: () => void) {
+/** Register an open overlay so Esc (closeTopOverlay) can close it. */
+export function registerOverlay(el: HTMLElement, close: () => void) {
   open.push({ el, close });
 }
 
-function forget(el: HTMLElement) {
+export function unregisterOverlay(el: HTMLElement) {
   const i = open.findIndex((o) => o.el === el);
   if (i >= 0) open.splice(i, 1);
 }
@@ -35,7 +36,7 @@ export function openGoTo() {
     gotoTotal.textContent = `of ${getPageCount()}`;
     gotoInput.value = String(getCurrentPage());
     gotoEl.hidden = false;
-    push(gotoEl, closeGoTo);
+    registerOverlay(gotoEl, closeGoTo);
   }
   gotoInput.focus();
   gotoInput.select();
@@ -44,7 +45,7 @@ export function openGoTo() {
 function closeGoTo() {
   if (gotoEl.hidden) return;
   gotoEl.hidden = true;
-  forget(gotoEl);
+  unregisterOverlay(gotoEl);
   gotoInput.blur();
 }
 
@@ -91,12 +92,12 @@ export function toggleHelp(keymap: Binding[]) {
     }),
   );
   helpEl.hidden = false;
-  push(helpEl, closeHelp);
+  registerOverlay(helpEl, closeHelp);
 }
 
 function closeHelp() {
   helpEl.hidden = true;
-  forget(helpEl);
+  unregisterOverlay(helpEl);
 }
 
 // Click outside the panel closes it.

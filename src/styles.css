@@ -276,3 +276,248 @@ body {
   margin: 0;
   color: var(--muted);
 }
+
+/* ---- Text layer (selectable text over the canvas), adapted from pdfjs-dist/web/pdf_viewer.css ---- */
+
+#pages {
+  --scale-round-x: 1px;
+  --scale-round-y: 1px;
+}
+
+.textLayer {
+  position: absolute;
+  inset: 0;
+  overflow: clip;
+  line-height: 1;
+  text-align: initial;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  z-index: 1;
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+}
+
+.textLayer :is(span, br) {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+  user-select: text;
+}
+
+.textLayer > :not(.markedContent),
+.textLayer .markedContent span:not(.markedContent) {
+  z-index: 1;
+  --font-height: 0;
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  --scale-x: 1;
+  --rotate: 0deg;
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+}
+
+.textLayer .markedContent {
+  display: contents;
+}
+
+.textLayer span[role="img"] {
+  user-select: none;
+  cursor: default;
+}
+
+.textLayer ::selection {
+  background: color-mix(in srgb, var(--accent), transparent 65%);
+  color: transparent;
+}
+
+.textLayer br::selection {
+  background: transparent;
+}
+
+.textLayer .endOfContent {
+  display: block;
+  position: absolute;
+  inset: 100% 0 0;
+  z-index: 0;
+  cursor: default;
+  user-select: none;
+}
+
+.textLayer.selecting .endOfContent {
+  top: 0;
+}
+
+/* Search matches */
+.textLayer mark {
+  color: transparent;
+  background: rgba(255, 196, 0, 0.42);
+  border-radius: 2px;
+  margin: -1px;
+  padding: 1px;
+}
+
+.textLayer mark.selected {
+  background: rgba(255, 120, 0, 0.6);
+  box-shadow: 0 0 0 1px rgba(255, 120, 0, 0.9);
+}
+
+/* ---- Search bar ---- */
+
+#search {
+  position: fixed;
+  top: 16px;
+  right: 24px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  font-size: 14px;
+}
+
+#search[hidden],
+#outline[hidden] {
+  display: none;
+}
+
+#search-input {
+  width: 16em;
+  padding: 4px 8px;
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+  outline: none;
+}
+
+#search-input:focus {
+  border-color: var(--accent);
+}
+
+#search-status {
+  min-width: 6em;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ---- Table of contents sidebar ---- */
+
+#outline {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: min(320px, 85vw);
+  display: flex;
+  flex-direction: column;
+  border-radius: 0 8px 8px 0;
+  border-left: 0;
+  animation: slide-in 0.15s ease-out;
+  z-index: 5;
+}
+
+@keyframes slide-in {
+  from {
+    transform: translateX(-100%);
+  }
+}
+
+#outline h2 {
+  margin: 0;
+  padding: 14px 16px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+#outline-tree {
+  flex: 1;
+  overflow: auto;
+  padding: 0 8px 16px;
+  font-size: 14px;
+}
+
+#outline-tree ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+#outline-tree ul ul {
+  padding-left: 14px;
+}
+
+#outline-tree li.collapsed > ul {
+  display: none;
+}
+
+#outline-tree button {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 8px 5px 20px;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  position: relative;
+}
+
+#outline-tree li.has-children > button::before {
+  content: "▾";
+  position: absolute;
+  left: 5px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+#outline-tree li.has-children.collapsed > button::before {
+  content: "▸";
+}
+
+#outline-tree button:hover,
+#outline-tree button:focus-visible {
+  background: var(--hover);
+  outline: none;
+}
+
+#outline-tree button:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+#outline-tree button.current {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+#outline-tree button:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+#outline-tree .title {
+  flex: 1;
+  min-width: 0;
+}
+
+#outline-tree .pnum {
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.outline-note {
+  margin: 0 8px 8px;
+  color: var(--muted);
+  font-size: 12px;
+}

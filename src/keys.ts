@@ -15,6 +15,8 @@ import {
 } from "./viewer";
 import { closeTopOverlay, openGoTo, toggleHelp } from "./overlays";
 import { cycleTheme, openRecent } from "./settings";
+import { nextMatch, openSearch, prevMatch, searchActive } from "./search";
+import { toggleOutline } from "./outline";
 
 type Action = (e: KeyboardEvent) => void | Promise<unknown>;
 
@@ -36,7 +38,8 @@ export const KEYMAP: Binding[] = [
   { keys: ["k", "ArrowUp"], label: "k / ↑", help: "Scroll up a little", action: () => scrollLines(-1), repeat: true },
   { keys: ["Space", "PageDown"], label: "Space", help: "Next screen", action: () => scrollScreens(1), repeat: true },
   { keys: ["Shift+Space", "PageUp"], label: "Shift+Space", help: "Previous screen", action: () => scrollScreens(-1), repeat: true },
-  { keys: ["n", "ArrowRight"], label: "n / →", help: "Next page", action: nextPage, repeat: true },
+  { keys: ["n", "ArrowRight"], label: "n / →", help: "Next page (next match while searching)", action: (e) => (e.key === "n" && searchActive() ? nextMatch() : nextPage()), repeat: true },
+  { keys: ["N"], label: "N", help: "Previous match while searching", action: () => (searchActive() ? prevMatch() : undefined), repeat: true },
   { keys: ["p", "ArrowLeft"], label: "p / ←", help: "Previous page", action: prevPage, repeat: true },
   { keys: ["g g", "Home"], label: "g g", help: "First page", action: firstPage },
   { keys: ["G", "End"], label: "G", help: "Last page", action: lastPage },
@@ -47,6 +50,8 @@ export const KEYMAP: Binding[] = [
   { keys: ["w"], label: "w", help: "Toggle fit width / fit page", action: toggleFit },
   { keys: ["f", "F11"], label: "f / F11", help: "Fullscreen", action: toggleFullscreen },
   { keys: ["d"], label: "d", help: "Cycle theme (light, dark, sepia)", action: cycleTheme },
+  { keys: ["/", "Ctrl+f"], label: "/", help: "Search (Enter / Shift+Enter: next / previous match)", action: openSearch },
+  { keys: ["t"], label: "t", help: "Table of contents", action: toggleOutline },
   {
     keys: ["1", "2", "3", "4", "5", "6", "7", "8", "9"],
     label: "1–9",

@@ -3,6 +3,7 @@ import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import type { TextContent } from "pdfjs-dist/types/src/display/api";
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
@@ -32,7 +33,12 @@ type Slot = {
   renderedKey: number; // zoom × dpr the canvas was drawn at; 0 = nothing drawn
   task: pdfjs.RenderTask | null;
   visible: boolean; // within the observer's one-screen margin
+  text: Promise<TextContent> | null; // cached; shared by the text layer and search
+  textLayer: TextLayerInfo | null;
 };
+
+/** A rendered text layer: one div per text item, in the same order as textContent items with a `str`. */
+export type TextLayerInfo = { n: number; div: HTMLDivElement; textDivs: HTMLElement[]; strs: string[] };
 
 const scroller = document.querySelector<HTMLElement>("#pages")!;
 const messageEl = document.querySelector<HTMLElement>("#message")!;
@@ -175,6 +181,8 @@ export async function openBytes(data: Uint8Array, name: string, key = name): Pro
       renderedKey: 0,
       task: null,
       visible: false,
+      text: null,
+      textLayer: null,
     };
   });
   currentPage = 1;
@@ -287,9 +295,11 @@ function render(slot: Slot) {
       freeCanvas(slot);
       slot.canvas = canvas;
       slot.renderedKey = key;
-      slot.el.append(canvas);
+      slot.el.prepend(canvas); // under the text and annotation layers
       evictFarPages();
       pump();
+      if (!slot.textLayer) void buildTextLayer(slot, vp);
+      else emit("pagerender", slot.textLayer);
     },
     (err) => {
       canvas.width = canvas.height = 0;
@@ -313,8 +323,69 @@ function evictFarPages() {
   for (const s of candidates) {
     if (excess-- <= 0) break;
     freeCanvas(s);
+    freeTextLayer(s);
     s.page.cleanup();
   }
+}
+
+/** Page text, fetched once and cached (search reads every page; the text layer reuses it). */
+export function getTextContent(n: number): Promise<TextContent> | undefined {
+  const s = slots[n - 1];
+  if (!s) return undefined;
+  s.text ??= s.page.getTextContent();
+  return s.text;
+}
+
+/**
+ * Invisible, selectable text over the canvas. Positions are in % of the page and font sizes use
+ * --total-scale-factor, so the layer follows zoom changes through CSS without being rebuilt.
+ */
+async function buildTextLayer(slot: Slot, vp: pdfjs.PageViewport) {
+  const id = loadId;
+  const div = document.createElement("div");
+  div.className = "textLayer";
+  const info: TextLayerInfo = { n: slot.n, div, textDivs: [], strs: [] };
+  slot.textLayer = info;
+  try {
+    const layer = new pdfjs.TextLayer({ textContentSource: await getTextContent(slot.n)!, container: div, viewport: vp });
+    await layer.render();
+    if (id !== loadId || slot.textLayer !== info) return;
+    info.textDivs = layer.textDivs;
+    info.strs = layer.textContentItemsStr;
+    slot.canvas?.after(div);
+    emit("pagerender", info);
+  } catch (err) {
+    if (slot.textLayer === info) slot.textLayer = null;
+    console.error(err);
+  }
+}
+
+function freeTextLayer(slot: Slot) {
+  if (!slot.textLayer) return;
+  slot.textLayer.div.remove();
+  slot.textLayer = null;
+  emit("pagefree", slot.n);
+}
+
+/** The rendered text layer of page n, if it's currently built. */
+export function getTextLayer(n: number): TextLayerInfo | null {
+  const t = slots[n - 1]?.textLayer;
+  return t && t.textDivs.length ? t : null;
+}
+
+/** Scroll so a point on page n (CSS px at zoom 1) sits a third of the way down the view. */
+export function scrollToPagePoint(n: number, x: number, y: number) {
+  const s = slots[n - 1];
+  if (!s) return;
+  scroller.scrollTop = s.el.offsetTop + y * zoom - scroller.clientHeight / 3;
+  const left = s.el.offsetLeft + x * zoom;
+  if (left < scroller.scrollLeft + FIT_PADDING || left > scroller.scrollLeft + scroller.clientWidth - FIT_PADDING) {
+    scroller.scrollLeft = left - scroller.clientWidth / 3;
+  }
+}
+
+export function getPdfDocument(): Promise<pdfjs.PDFDocumentProxy> | null {
+  return currentTask?.promise ?? null;
 }
 
 function freeCanvas(slot: Slot) {

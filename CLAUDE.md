@@ -3,7 +3,7 @@
 Minimalist, keyboard-first desktop PDF reader built with **Tauri 2 + vanilla TypeScript + PDF.js**.
 The page is the whole interface. Targets: opens instantly, stays out of the way, installer under ~10 MB.
 
-**Current stage: 5 (Search and table of contents).** Stages 0–4 done. Update this line when a stage's "done when" check passes.
+**Current stage: annotations (right-click radial menu), then 6 (ship).** Stages 0–5 done. Update this line when a stage's "done when" check passes.
 
 ## Design principles (do not violate)
 
@@ -47,7 +47,7 @@ src/
   main.ts        app start, wiring
   viewer.ts      load PDF, render pages, lazy rendering, zoom
   keys.ts        single keymap (KEYMAP: keys, label, help, action) + key dispatch; help overlay source
-  overlays.ts    on-demand overlays (go-to box, ? help); Esc closes the most recent one. Stage 5 search bar / TOC register here too
+  overlays.ts    on-demand overlays (go-to box, ? help) + registerOverlay/unregisterOverlay; Esc closes the most recent one (search bar and TOC register here too)
   settings.ts    store: theme, per-file positions, recent files
   search.ts      text search + highlights
   outline.ts     table of contents sidebar
@@ -85,8 +85,10 @@ Keep each concern in its own module as above. Don't create new top-level modules
 - **Themes**: colours as CSS variables on `:root`, overridden per `:root[data-theme=…]`. The page filter (`--page-filter`: dark `invert(1) hue-rotate(180deg)`, sepia `sepia(0.35) brightness(0.95)`) applies to the canvas only, so annotations keep their real colours. First launch follows `prefers-color-scheme`, then persists the user's choice (store + a localStorage mirror so it applies before the store loads).
 - **viewer events**: `viewer.events` (EventTarget) emits `open` (DocInfo), `close`, `pagechange`, `scroll`, `pagerender`, `pagefree`, `openfailed`. Feature modules (settings, search, outline, annotations) listen instead of being called from viewer.ts.
 - **Positions**: per file, keyed by path, ignored if the file size changed: `{ page, offset (0–1), zoom, mode, opened, size }`. Save debounced 500 ms on scroll/zoom and on window close (`onCloseRequested`). On open, `setPosition` restores zoom first, then scrolls. Last 10 recent files on the start screen; keys 1–9 open them; a missing file is removed with a clear message.
-- **Search (Stage 5)**: cache `page.getTextContent()` per page; search page by page in the background with progress; cancel previous search on query change; case-insensitive, whitespace/line-break tolerant; highlight with `<mark>` in the text layer. Scanned PDFs → show "No searchable text in this PDF".
-- **Outline (Stage 5)**: `pdf.getOutline()`; resolve string dests via `getDestination()` then `getPageIndex(ref) + 1`. No outline → fall back to a page list.
+- **Text layer**: built once per rendered page with `pdfjs.TextLayer` (viewport at render time) and freed with the canvas. It scales through `--total-scale-factor` on `#pages` (set in `applySizes`), so zooming never rebuilds it. `textDivs[i]` corresponds to the i-th text item that has a `str` (marked-content items are skipped by both PDF.js and the search index).
+- **Search**: `search.ts` caches a normalised index per page (lower case, whitespace runs → one space, items with `hasEOL` joined by a space, others joined directly) with maps back to (item, char). Searches start at the current page and wrap, jump to the first hit immediately, keep matches in document order, cancel via `searchId`. Highlights are `<mark>` elements inside text-layer spans, applied on `pagerender`. Typing the same query again + Enter = next match. Scanned PDFs → "No searchable text in this PDF".
+- **Outline**: `outline.ts` builds the tree lazily on first `t`; resolves string dests via `getDestination()`, explicit dests via `getPageIndex(ref) + 1` (or a numeric page index). Arrow keys / j k / Home End / Enter inside the tree, with `stopPropagation` so global shortcuts don't also fire. No outline → plain page list.
+- **Tests and saved positions**: the app restores each file's last position, including files opened by tests with `openBytes(data, name)` (key = name). Tests must navigate explicitly (e.g. `goToPage(1)`) rather than assume a file opens at page 1.
 - **Errors**: corrupt/renamed and password-protected files must show a clear message, never crash.
 
 ## Keymap
