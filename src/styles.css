@@ -733,7 +733,34 @@ svg.ink text {
   }
 }
 
-/* Two discs behind the rings */
+/* Liquid glass: tints and edge light per theme */
+#radial {
+  --glass-tint: rgba(255, 255, 255, 0.12);
+  --glass-tint-strong: rgba(255, 255, 255, 0.5);
+  --glass-edge: rgba(255, 255, 255, 0.65);
+  --glass-shine: rgba(255, 255, 255, 0.85);
+  --glass-shade: rgba(0, 0, 0, 0.1);
+  --glass-drop: rgba(0, 0, 0, 0.22);
+}
+
+:root[data-theme="dark"] #radial {
+  --glass-tint: rgba(40, 40, 48, 0.3);
+  --glass-tint-strong: rgba(255, 255, 255, 0.12);
+  --glass-edge: rgba(255, 255, 255, 0.2);
+  --glass-shine: rgba(255, 255, 255, 0.35);
+  --glass-shade: rgba(0, 0, 0, 0.35);
+  --glass-drop: rgba(0, 0, 0, 0.5);
+}
+
+:root[data-theme="sepia"] #radial {
+  --glass-tint: rgba(255, 246, 225, 0.14);
+  --glass-tint-strong: rgba(255, 248, 232, 0.5);
+  --glass-edge: rgba(255, 250, 238, 0.7);
+  --glass-shade: rgba(80, 55, 20, 0.12);
+  --glass-drop: rgba(60, 40, 10, 0.25);
+}
+
+/* Two discs behind the rings: an outer glass lens and a recessed groove for the tools */
 #radial::before,
 #radial::after {
   content: "";
@@ -746,17 +773,29 @@ svg.ink text {
 #radial::before {
   width: 290px;
   height: 290px;
-  background: color-mix(in srgb, var(--panel-bg), transparent 18%);
-  border: 1px solid var(--panel-border);
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
-  backdrop-filter: blur(8px);
+  background:
+    radial-gradient(110% 55% at 30% 0%, color-mix(in srgb, var(--glass-shine), transparent 45%), transparent 50%),
+    radial-gradient(90% 60% at 70% 105%, rgba(255, 255, 255, 0.18), transparent 55%),
+    var(--glass-tint);
+  border: 1px solid var(--glass-edge);
+  box-shadow:
+    inset 0 1.5px 1px var(--glass-shine),
+    inset 0 -1.5px 2px var(--glass-shade),
+    inset 0 0 28px rgba(255, 255, 255, 0.12),
+    0 18px 50px var(--glass-drop),
+    0 2px 6px var(--glass-drop);
+  backdrop-filter: blur(10px) saturate(180%);
+  backdrop-filter: blur(1.5px) url(#liquid-glass) saturate(190%) brightness(1.04);
 }
 
 #radial::after {
-  width: 182px;
-  height: 182px;
-  background: color-mix(in srgb, var(--bg), transparent 30%);
-  border: 1px solid var(--panel-border);
+  width: 196px;
+  height: 196px;
+  background: radial-gradient(circle at 50% 35%, rgba(255, 255, 255, 0.1), transparent 70%);
+  border: 1px solid var(--glass-edge);
+  box-shadow:
+    inset 0 2px 6px var(--glass-shade),
+    inset 0 -1px 1px var(--glass-shine);
 }
 
 #radial button {
@@ -773,12 +812,25 @@ svg.ink text {
   outline: none;
 }
 
+/* Glass bubbles */
+#radial .tool,
+#radial .center,
+#radial .opt.size {
+  background:
+    linear-gradient(180deg, var(--glass-tint-strong), rgba(255, 255, 255, 0.04) 60%),
+    var(--glass-tint);
+  border: 1px solid var(--glass-edge);
+  box-shadow:
+    inset 0 1px 1px var(--glass-shine),
+    inset 0 -2px 4px var(--glass-shade),
+    0 4px 12px var(--glass-drop);
+  backdrop-filter: blur(6px) saturate(160%);
+}
+
 #radial .tool {
   width: 44px;
   height: 44px;
-  background: var(--panel-bg);
-  border: 1px solid var(--panel-border);
-  transition: transform 0.08s;
+  transition: transform 0.12s cubic-bezier(0.3, 1.6, 0.5, 1), box-shadow 0.12s;
 }
 
 #radial .tool svg,
@@ -794,13 +846,19 @@ svg.ink text {
 
 #radial .tool:hover,
 #radial .tool:focus-visible {
-  transform: translate(-50%, -50%) scale(1.1);
-  box-shadow: 0 0 0 2px var(--accent);
+  transform: translate(-50%, -50%) scale(1.12);
+  box-shadow:
+    inset 0 1px 1px var(--glass-shine),
+    inset 0 -2px 4px var(--glass-shade),
+    0 0 0 2px color-mix(in srgb, var(--accent), transparent 35%),
+    0 6px 16px var(--glass-drop);
 }
 
 #radial .tool.active {
-  background: var(--accent);
-  border-color: var(--accent);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.45), transparent 55%),
+    color-mix(in srgb, var(--accent), transparent 15%);
+  border-color: color-mix(in srgb, var(--accent), white 40%);
   color: #fff;
 }
 
@@ -809,8 +867,6 @@ svg.ink text {
   height: 40px;
   left: 0;
   top: 0;
-  background: var(--panel-bg);
-  border: 1px solid var(--panel-border);
 }
 
 #radial .dot {
@@ -824,9 +880,12 @@ svg.ink text {
 #radial .opt {
   width: 28px;
   height: 28px;
-  border: 2px solid var(--panel-bg);
-  box-shadow: 0 0 0 1px var(--panel-border);
-  transition: transform 0.08s;
+  border: 2px solid var(--glass-edge);
+  box-shadow:
+    inset 0 1px 2px rgba(255, 255, 255, 0.6),
+    inset 0 -2px 3px rgba(0, 0, 0, 0.15),
+    0 3px 8px var(--glass-drop);
+  transition: transform 0.12s cubic-bezier(0.3, 1.6, 0.5, 1);
 }
 
 #radial .opt:hover,
@@ -835,7 +894,10 @@ svg.ink text {
 }
 
 #radial .opt.active {
-  box-shadow: 0 0 0 2px var(--accent);
+  box-shadow:
+    inset 0 1px 2px rgba(255, 255, 255, 0.6),
+    0 0 0 2px var(--accent),
+    0 3px 8px var(--glass-drop);
 }
 
 #radial .opt.custom {
@@ -849,10 +911,6 @@ svg.ink text {
   border-radius: 50%;
   background: var(--chosen);
   border: 2px solid #fff;
-}
-
-#radial .opt.size {
-  background: var(--panel-bg);
 }
 
 #radial .hidden-color {
@@ -893,8 +951,426 @@ svg.ink text {
   stroke-linecap: round;
 }
 
+/* AI slot and actions in the radial menu */
+#radial .tool.ai {
+  color: var(--accent);
+}
+
+#radial .tool.ai.active,
+#radial .tool.ai:focus-visible {
+  color: var(--text);
+}
+
+#radial .opt.ai-act {
+  width: auto;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 15px;
+  border: 1px solid var(--glass-edge);
+  background:
+    linear-gradient(180deg, var(--glass-tint-strong), rgba(255, 255, 255, 0.04) 60%),
+    var(--glass-tint);
+  backdrop-filter: blur(6px) saturate(160%);
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+#radial .opt.ai-act:hover,
+#radial .opt.ai-act:focus-visible {
+  color: #fff;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.4), transparent 60%),
+    var(--accent);
+}
+
+/* ---- AI: answer card, chat panel, key setup ---- */
+
+.ai-card,
+#ai-chat {
+  background: color-mix(in srgb, var(--panel-bg), transparent 10%);
+  backdrop-filter: blur(18px) saturate(170%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 12px 36px rgba(0, 0, 0, 0.22);
+}
+
+.ai-card {
+  position: absolute;
+  z-index: 5;
+  width: 340px;
+  max-width: 90vw;
+  display: flex;
+  flex-direction: column;
+  font-size: 14px;
+  line-height: 1.5;
+  animation: radial-pop 0.12s ease-out;
+}
+
+.ai-card header,
+#ai-chat header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px 4px 14px;
+}
+
+.ai-title,
+#ai-chat h2 {
+  margin: 0;
+  flex: 1;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.ai-lang {
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+}
+
+.ai-x {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.ai-x:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.ai-body {
+  max-height: 42vh;
+  overflow: auto;
+  padding: 0 14px 6px;
+  user-select: text;
+}
+
+.ai-card footer {
+  display: flex;
+  gap: 6px;
+  padding: 6px 10px 10px;
+  border-top: 1px solid var(--panel-border);
+}
+
+.ai-card footer button,
+.ai-chips button {
+  padding: 4px 10px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--hover);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.ai-card footer button:hover,
+.ai-chips button:hover {
+  border-color: var(--accent);
+}
+
+.ai-wait {
+  color: var(--muted);
+  animation: ai-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes ai-pulse {
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.ai-error {
+  color: #d32f2f;
+}
+
+/* Answer text */
+.md p,
+.md ul,
+.md ol,
+.md pre {
+  margin: 0.5em 0;
+}
+
+.md ul,
+.md ol {
+  padding-left: 1.3em;
+}
+
+.md h4 {
+  margin: 0.8em 0 0.3em;
+  font-size: 1em;
+}
+
+.md code {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.9em;
+  padding: 0.05em 0.3em;
+  border-radius: 3px;
+  background: var(--hover);
+}
+
+.md pre {
+  overflow: auto;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--hover);
+}
+
+.md pre code {
+  padding: 0;
+  background: none;
+}
+
+.cite {
+  display: inline;
+  padding: 0 6px;
+  margin: 0 1px;
+  font: inherit;
+  font-size: 0.8em;
+  font-weight: 600;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent), transparent 88%);
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.cite:hover {
+  color: #fff;
+  background: var(--accent);
+}
+
+/* A cited page flashes when you jump to it */
+.page.ai-flash {
+  animation: ai-flash 1.4s ease-out;
+}
+
+@keyframes ai-flash {
+  0%,
+  30% {
+    box-shadow:
+      0 0 0 3px var(--accent),
+      var(--page-shadow);
+  }
+}
+
+/* Chat panel (c) */
+#ai-chat {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(400px, 92vw);
+  display: flex;
+  flex-direction: column;
+  border-radius: 8px 0 0 8px;
+  border-right: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  animation: slide-in-right 0.15s ease-out;
+  z-index: 5;
+}
+
+#ai-chat[hidden],
+#ai-key[hidden] {
+  display: none;
+}
+
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+  }
+}
+
+.ai-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 14px 8px;
+}
+
+.ai-log {
+  flex: 1;
+  overflow: auto;
+  padding: 0 14px;
+  user-select: text;
+}
+
+.ai-turn {
+  padding: 10px 0;
+  border-top: 1px solid var(--panel-border);
+}
+
+.ai-q {
+  font-weight: 600;
+  white-space: pre-wrap;
+}
+
+.ai-steps {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.ai-steps li::before {
+  content: "↳ ";
+}
+
+.ai-steps li.note {
+  font-style: italic;
+}
+
+.ai-link {
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.ai-ask {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 10px 14px 4px;
+  border-top: 1px solid var(--panel-border);
+}
+
+.ai-ask textarea {
+  flex: 1;
+  resize: none;
+  padding: 7px 10px;
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  outline: none;
+}
+
+.ai-ask textarea:focus {
+  border-color: var(--accent);
+}
+
+.ai-send {
+  padding: 7px 14px;
+  font: inherit;
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent);
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+#ai-chat.busy .ai-send {
+  background: var(--muted);
+}
+
+.ai-note {
+  margin: 0;
+  padding: 4px 14px 10px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.ai-keylink {
+  color: var(--accent);
+  cursor: pointer;
+}
+
+/* Key setup (Ctrl+,) */
+#ai-key {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+#ai-key form {
+  width: min(440px, 100%);
+  padding: 18px 20px;
+  font-size: 14px;
+}
+
+#ai-key h2 {
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+
+#ai-key p {
+  margin: 0 0 12px;
+  color: var(--muted);
+}
+
+#ai-key input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 10px;
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  outline: none;
+}
+
+#ai-key input:focus {
+  border-color: var(--accent);
+}
+
+#ai-key .row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+#ai-key button {
+  padding: 6px 12px;
+  font: inherit;
+  color: var(--text);
+  background: var(--hover);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+#ai-key button.primary {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+#ai-key .status {
+  font-size: 12px;
+  color: var(--muted);
+}
+
 /* Stacking order of everything above the pages */
 #message { z-index: 5; }
 #indicator { z-index: 6; }
 #goto, #search { z-index: 10; }
-#help { z-index: 20; }
+#help, #ai-key { z-index: 20; }

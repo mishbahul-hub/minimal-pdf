@@ -1,13 +1,13 @@
 # CLAUDE.md
 
-Minimalist, keyboard-first desktop PDF reader built with **Tauri 2 + vanilla TypeScript + PDF.js**.
+Minimalist, keyboard-first desktop PDF reader built with **Tauri 2 + vanilla TypeScript + PDF.js **.
 The page is the whole interface. Targets: opens instantly, stays out of the way, installer under ~10 MB.
 
-**Status: v1 complete.** Stages 0–6 and annotations done. Next: stretch goals (below), only when asked. Update this line when a stage's "done when" check passes.
+**Status: v1 complete + AI (stages A1–A2: selection actions, agentic-RAG chat, summaries).** Next: stage A3, release pipeline (GitHub Actions + updater). Update this line when a stage's "done when" check passes.
 
 ## Design principles (do not violate)
 
-- **The page is the UI.** No toolbar, ever: controls (search bar, go-to box, sidebar, help, the right-click radial menu) appear only on demand and close with `Esc`. Annotation tools live only in the radial menu (right-click or `a`), never in a top bar.
+- **The page is the UI.** No toolbar, ever: controls (search bar, go-to box, sidebar, help, the right-click radial menu) appear only on demand and close with `Esc`. Annotation tools live only in the radial menu (right-click or `a`), never in a top bar. AI features follow the same rule: radial menu, the `c` chat panel, the answer card.
 - **Keyboard first, mouse friendly.** Every feature must be reachable from the keyboard.
 - **Render only what is visible.** Never render all pages of a large PDF up front (after Stage 1).
 - **Never modify the user's PDF.** Only read it. All app data goes in the settings store (or sidecar JSON for future notes).
@@ -24,6 +24,7 @@ The page is the whole interface. Targets: opens instantly, stays out of the way,
 | File picker | `@tauri-apps/plugin-dialog` |
 | File reading | `@tauri-apps/plugin-fs` |
 | Settings | `@tauri-apps/plugin-store` (`settings.json`) |
+| AI | Claude API over raw HTTP from Rust (`reqwest`), API key in the OS credential store (`keyring`) |
 | Styling | Plain CSS with variables; themes via `data-theme` (light, dark, sepia) |
 
 ## Commands
@@ -52,7 +53,8 @@ src/
   search.ts      text search + highlights
   outline.ts     table of contents sidebar
   annotate.ts    annotation tools (pen, pencil, highlighter, eraser, rect, ellipse, text comments), SVG layers, undo/redo, per-file notes store
-  radial.ts      right-click radial menu: tools on the inner ring, colours/sizes on the outer ring (the only annotation UI)
+  radial.ts      right-click radial menu: tools on the inner ring, colours/sizes on the outer ring (the only annotation UI); slot 9 = AI
+  ai.ts          Claude features: selection actions + answer card, chat panel (agentic RAG tool loop), summaries, key setup
   styles.css
   vite-env.d.ts  Vite client types (needed for CSS and `?url` imports under TS 6)
 index.html
@@ -60,6 +62,7 @@ src-tauri/
   tauri.conf.json
   capabilities/default.json   plugin permissions
   src/lib.rs
+  src/ai.rs      Claude API proxy (key in keyring, streams SSE events to the frontend over a Channel)
 ```
 
 Keep each concern in its own module as above. Don't create new top-level modules without a reason.
@@ -84,7 +87,7 @@ Keep each concern in its own module as above. Don't create new top-level modules
 - **Navigation**: next/previous page are relative to the page at the top edge of the view (not the centre-based current page); `goToPage` aligns the page top with `FIT_PADDING` of space.
 - **Window**: starts hidden (`visible: false`); `lib.rs` shrinks it to the monitor work area if the 900×1100 default doesn't fit, centres it, then shows it.
 - **Launch file / single instance**: `lib.rs` takes the first existing `.pdf` argument (relative paths resolved against the cwd), allows it in the fs scope and keeps it until the frontend calls `take_launch_file`. The single-instance plugin (registered first) forwards a second launch's PDF as an `open-file` event and focuses the window. `bundle.fileAssociations` registers `.pdf` ("Open with Minimal PDF"). Icons are generated from `app-icon.png` with `npm run tauri icon app-icon.png` (desktop sizes only; mobile icon folders are deleted).
-- **Release build**: `npm run tauri build` → NSIS ~2 MB, MSI ~2.7 MB, exe ~5.4 MB.
+- **Release build**: `npm run tauri build` → NSIS ~2.4 MB, MSI ~3.2 MB, exe ~6.7 MB.
 - **Testing in the running app**: launch with `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222` and drive it over the DevTools protocol (`Runtime.evaluate` with `import("/src/viewer.ts")`, `Input.dispatchKeyEvent`, `Page.captureScreenshot`). Don't use the window during a run; real input skews results.
 - **Themes**: colours as CSS variables on `:root`, overridden per `:root[data-theme=…]`. The page filter (`--page-filter`: dark `invert(1) hue-rotate(180deg)`, sepia `sepia(0.35) brightness(0.95)`) applies to the canvas only, so annotations keep their real colours. First launch follows `prefers-color-scheme`, then persists the user's choice (store + a localStorage mirror so it applies before the store loads).
 - **viewer events**: `viewer.events` (EventTarget) emits `open` (DocInfo), `close`, `pagechange`, `scroll`, `pagerender`, `pagefree`, `openfailed`. Feature modules (settings, search, outline, annotations) listen instead of being called from viewer.ts.
@@ -95,6 +98,9 @@ Keep each concern in its own module as above. Don't create new top-level modules
 - **Tests and saved positions**: the app restores each file's last position, including files opened by tests with `openBytes(data, name)` (key = name). Tests must navigate explicitly (e.g. `goToPage(1)`) rather than assume a file opens at page 1.
 - **Errors**: corrupt/renamed and password-protected files must show a clear message, never crash.
 - **Annotations**: stored per file in the app data folder as `notes-<fnv1a(path)>.json` (plugin-store), keyed by page; never written into the PDF. Coordinates are page units (CSS px at zoom 1); each page gets an `svg.ink` with `viewBox` = page size, so ink scales with zoom for free. The ink layer shares `--page-filter` and blends (`multiply`, `screen` in dark) so black ink stays visible on dark pages. A stroke only accepts moves from the pointer that started it. Text comments are SVG `<text>` (hanging baseline, 1.25 line height); editing uses an on-page textarea + a small font/size/colour bar, sized with `--zoom`. Undo/redo ops are `{ added, removed }` item lists (an edit = remove + add). Tool styles persist in settings (`annotationStyles`); the active tool resets to pointer on launch. Right-click anywhere except text fields never shows the browser menu.
+- **AI (ai.ts / ai.rs)**: the frontend builds each Messages API request; Rust's `ai_stream` adds the key, POSTs with `stream: true` and forwards every SSE `data` JSON on a `tauri::ipc::Channel`, then `[DONE]`. The key never returns to the webview (`ai_has_key` / `ai_set_key` / `ai_clear_key`). Model `claude-opus-5-5` everywhere (quick actions `effort: low`, chat `medium`); thinking is always on for this model, so never send `thinking: disabled` or `budget_tokens`. Betas: `server-side-fallback-2026-07-01` with `fallbacks: "default"` (refusal fallback), and for chat `thinking-display-updates-2026-08-18` with `thinking.display: "updates"` (progress notes between tool calls arrive as non-empty `thinking` blocks and show as steps). Assistant turns go back unchanged, thinking blocks included (signature via `signature_delta`); after a `fallback` block, earlier thinking/tool_use blocks are dropped (`echoable`). Tools are `strict` + `eager_input_streaming`; tool input JSON is parsed defensively and validated before running. `tool_choice` must stay `auto` (forced choice is a 400 on this model). Check `stop_reason` (`refusal`, `max_tokens` with a tool_use) before using content. On error the failed question is removed from `history` so the conversation stays valid. Short documents (≤ 60 pages, ≤ 60k chars) go into the system prompt with `cache_control`; top-level `cache_control` caches the growing conversation.
+- **Agentic RAG tools**: `search_document` (`searchText` in search.ts: phrase + keyword scoring over the cached page index), `read_pages` (`pageText`, ≤ 8 pages / 40k chars per call), `get_outline` (`getOutlineItems` in outline.ts), `get_annotations` (`annotationList` in annotate.ts + `textBoxes` to find the text under highlights). Citations `[p. N]` / `[pp. N–M]` render as `.cite` buttons that `goToPage` and flash the page. Summaries are cached per file in the notes store (`aiSummaries`, via `getDocData`/`setDocData`).
+- **Testing AI without the real API**: debug builds read `MINIMALPDF_AI_BASE_URL` (point at a local mock that streams canned SSE, including tool_use) and `MINIMALPDF_AI_KEY` (so tests never touch the real credential store). Release builds ignore both.
 - **Dev server hygiene**: stopping a background `tauri dev` can leave Vite on port 1420; kill leftover `node … vite` processes for this project before relaunching, or the new run fails with "Port 1420 is already in use". Modules served after edits carry `?t=` timestamps: tests must import the same URLs the app loaded (see `performance.getEntriesByType("resource")`), or they get a second module instance.
 
 ## Keymap
@@ -113,7 +119,9 @@ Keep each concern in its own module as above. Don't create new top-level modules
 | d | Cycle theme |
 | / | Search (Enter / Shift+Enter or n / N for next / prev match) |
 | t | Table of contents |
-| a / right-click | Annotation tools (radial menu); inside it 1–8 pick a tool |
+| a / right-click | Annotation tools (radial menu); inside it 1–8 pick a tool, 9 = AI. Right-click on selected text shows Explain / Simplify / Define / Translate / Ask |
+| c | Ask Claude: chat with the PDF, summaries |
+| Ctrl+, | Claude API key |
 | Ctrl+Z / Ctrl+Y | Undo / redo annotation |
 | ? | Shortcut help |
 | Esc | Close any overlay |

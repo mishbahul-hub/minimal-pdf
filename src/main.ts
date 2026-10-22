@@ -8,6 +8,7 @@ import "./search";
 import "./outline";
 import "./annotate";
 import "./radial";
+import "./ai";
 
 bindKeys();
 

@@ -1,6 +1,7 @@
 // Table of contents (t): a slide-in sidebar built from the PDF's bookmarks, or a page list if it has none.
 import { events, getCurrentPage, getPageCount, getPdfDocument, goToPage } from "./viewer";
 import { registerOverlay, unregisterOverlay } from "./overlays";
+import type { PDFDocumentProxy } from "pdfjs-dist";
 
 type Entry = { title: string; page: number | null; el: HTMLButtonElement; li: HTMLLIElement; parent: Entry | null };
 
@@ -33,23 +34,10 @@ async function build() {
     return;
   }
 
-  /** Resolve a destination to a 1-based page number (string destinations are named in the document). */
-  const pageOf = async (dest: OutlineNode["dest"]): Promise<number | null> => {
-    try {
-      const explicit = typeof dest === "string" ? await pdf.getDestination(dest) : dest;
-      const ref = explicit?.[0];
-      if (ref == null) return null;
-      if (typeof ref === "number") return ref + 1; // some PDFs store a page index directly
-      return (await pdf.getPageIndex(ref as Parameters<typeof pdf.getPageIndex>[0])) + 1;
-    } catch {
-      return null;
-    }
-  };
-
   const walk = async (nodes: OutlineNode[], parent: Entry | null): Promise<HTMLUListElement> => {
     const ul = document.createElement("ul");
     for (const node of nodes) {
-      const li = item(node, parent, await pageOf(node.dest));
+      const li = item(node, parent, await resolvePage(pdf, node.dest));
       const entry = entries[entries.length - 1];
       if (node.items?.length) {
         li.classList.add("has-children", "collapsed");
@@ -61,6 +49,53 @@ async function build() {
   };
   const root = await walk(outline, null);
   if (id === buildId) treeEl.append(root);
+}
+
+export type OutlineItem = { title: string; page: number; level: number };
+let flat: Promise<OutlineItem[]> | null = null;
+
+/** The bookmarks as a flat list in document order (for the AI tools). Empty if the PDF has none. */
+export function getOutlineItems(): Promise<OutlineItem[]> {
+  flat ??= (async () => {
+    const pdf = await getPdfDocument();
+    if (!pdf) return [];
+    const outline = (await pdf.getOutline()) as OutlineNode[] | null;
+    const out: OutlineItem[] = [];
+    const walk = async (nodes: OutlineNode[], level: number) => {
+      for (const node of nodes) {
+        const page = await resolvePage(pdf, node.dest);
+        if (page) out.push({ title: node.title || "Untitled", page, level });
+        if (node.items?.length) await walk(node.items, level + 1);
+      }
+    };
+    await walk(outline ?? [], 0);
+    return out;
+  })();
+  return flat;
+}
+
+/** The section containing page n: the last bookmark starting on or before it, up to the next one at the same or a higher level. */
+export async function sectionAt(n: number): Promise<{ title: string; from: number; to: number } | null> {
+  const items = await getOutlineItems();
+  let i = -1;
+  for (let k = 0; k < items.length; k++) if (items[k].page <= n) i = k;
+  if (i === -1) return null;
+  const cur = items[i];
+  const next = items.slice(i + 1).find((x) => x.level <= cur.level && x.page > cur.page);
+  return { title: cur.title, from: cur.page, to: next ? Math.max(cur.page, next.page - 1) : getPageCount() };
+}
+
+/** Resolve a destination to a 1-based page number (string destinations are named in the document). */
+async function resolvePage(pdf: PDFDocumentProxy, dest: OutlineNode["dest"]): Promise<number | null> {
+  try {
+    const explicit = typeof dest === "string" ? await pdf.getDestination(dest) : dest;
+    const ref = explicit?.[0];
+    if (ref == null) return null;
+    if (typeof ref === "number") return ref + 1; // some PDFs store a page index directly
+    return (await pdf.getPageIndex(ref as Parameters<typeof pdf.getPageIndex>[0])) + 1;
+  } catch {
+    return null;
+  }
 }
 
 function item(node: OutlineNode, parent: Entry | null, page: number | null): HTMLLIElement {
@@ -192,6 +227,7 @@ events.addEventListener("close", () => {
   closeOutline();
   buildId++;
   built = null;
+  flat = null;
   entries = [];
   treeEl.replaceChildren();
 });

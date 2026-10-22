@@ -3,10 +3,11 @@
 import { TOOLS, getStyle, getTool, setStyle, setTool, type Tool } from "./annotate";
 import { registerOverlay, unregisterOverlay } from "./overlays";
 import { getDoc } from "./viewer";
+import { askAboutSelection, currentSelection, QUICK_ACTIONS, toggleChat, type Selected } from "./ai";
 
-const R_TOOLS = 66; // radius of the tool ring
+const R_TOOLS = 70; // radius of the tool ring
 const R_OPTIONS = 120; // radius of the colour / size ring
-const EDGE = 150; // keep the whole menu inside the window
+const EDGE = 160; // keep the whole menu inside the window
 
 /**
  * Two-tone icons on a 24×24 grid: outline in the button's text colour, a soft tinted body, and one
@@ -40,6 +41,13 @@ const ICONS: Record<Tool, (c: string) => string> = {
     `<path d="M5.5 20.5h13" stroke="${c}" stroke-width="2.2"/>`,
 };
 
+/** The inner ring: the annotation tools, then "ai" (ask Claude). */
+type Slot = Tool | "ai";
+const SLOTS: Slot[] = [...TOOLS.map((t) => t.id), "ai"];
+const AI_ICON =
+  `<path ${SOFT} d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1-5.1-1.9 5.1-1.9z"/>` +
+  `<path d="M18.5 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z" fill="currentColor" stroke="none"/>`;
+
 const menu = document.createElement("div");
 menu.id = "radial";
 menu.hidden = true;
@@ -51,11 +59,13 @@ colorInput.type = "color";
 colorInput.className = "hidden-color";
 menu.append(colorInput);
 
-let selected: Tool = "pointer"; // tool whose options the outer ring shows
+let selected: Slot = "pointer"; // slot whose options the outer ring shows
+let aiSel: Selected | null = null; // text selected when the menu opened
 let lastPointer: { x: number; y: number } | null = null;
 
-function icon(t: Tool) {
-  return `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[t](getStyle(t).color)}</svg>`;
+function icon(t: Slot) {
+  const body = t === "ai" ? AI_ICON : ICONS[t](getStyle(t).color);
+  return `<svg viewBox="0 0 24 24" aria-hidden="true">${body}</svg>`;
 }
 
 function place(el: HTMLElement, angleDeg: number, radius: number) {
@@ -67,16 +77,16 @@ function place(el: HTMLElement, angleDeg: number, radius: number) {
 function build() {
   menu.querySelectorAll(".tool, .opt, .center").forEach((el) => el.remove());
 
-  TOOLS.forEach((t, i) => {
+  SLOTS.forEach((id, i) => {
     const b = document.createElement("button");
     b.type = "button";
-    b.className = "tool";
-    b.dataset.tool = t.id;
-    b.title = `${t.label} (${i + 1})`;
+    b.className = id === "ai" ? "tool ai" : "tool";
+    b.dataset.tool = id;
+    b.title = `${id === "ai" ? "Ask Claude" : TOOLS[i].label} (${i + 1})`;
     b.setAttribute("role", "menuitemradio");
-    b.innerHTML = icon(t.id);
-    place(b, -90 + (i * 360) / TOOLS.length, R_TOOLS);
-    b.addEventListener("click", () => pickTool(t.id));
+    b.innerHTML = icon(id);
+    place(b, -90 + (i * 360) / SLOTS.length, R_TOOLS);
+    b.addEventListener("click", () => pickTool(id));
     menu.append(b);
   });
 
@@ -93,7 +103,7 @@ function build() {
 // Hovering a tool previews its options; leaving the menu goes back to the selected tool's.
 menu.addEventListener("pointerover", (e) => {
   const t = (e.target as Element).closest<HTMLElement>(".tool");
-  if (t) showOptions(t.dataset.tool as Tool);
+  if (t) showOptions(t.dataset.tool as Slot);
 });
 menu.addEventListener("pointerleave", () => showOptions(selected));
 
@@ -102,23 +112,24 @@ function refresh() {
   const active = getTool();
   menu.querySelectorAll<HTMLElement>(".tool").forEach((b) => {
     b.classList.toggle("active", b.dataset.tool === active);
-    b.innerHTML = icon(b.dataset.tool as Tool); // icons show each tool's current colour
+    b.innerHTML = icon(b.dataset.tool as Slot); // icons show each tool's current colour
   });
   const center = menu.querySelector<HTMLElement>(".center")!;
   const s = getStyle(active);
   center.innerHTML = active === "pointer" || active === "eraser" ? icon(active) : `<span class="dot" style="background:${s.color}"></span>`;
 }
 
-let shownFor: Tool | null = null;
+let shownFor: Slot | null = null;
 
 /**
  * Outer ring: the tool's colours, a custom-colour picker, and its size presets.
  * Rebuilt only when the tool changes (or `force`), so options never vanish under the pointer mid-click.
  */
-function showOptions(t: Tool, force = false) {
+function showOptions(t: Slot, force = false) {
   if (t === shownFor && !force) return;
   shownFor = t;
   menu.querySelectorAll(".opt").forEach((el) => el.remove());
+  if (t === "ai") return showAiOptions();
   const def = TOOLS.find((x) => x.id === t)!;
   const style = getStyle(t);
   const items: HTMLElement[] = [];
@@ -188,7 +199,44 @@ function showOptions(t: Tool, force = false) {
   });
 }
 
-function pickTool(t: Tool) {
+/** Outer ring for the AI slot: actions on the selected text, or opening the chat. */
+function showAiOptions() {
+  const sel = aiSel;
+  const items: HTMLElement[] = [];
+  const pill = (label: string, title: string, onPick: () => void) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "opt ai-act";
+    b.textContent = label;
+    b.title = title;
+    b.addEventListener("click", () => {
+      closeRadial();
+      onPick();
+    });
+    items.push(b);
+  };
+  if (sel) {
+    for (const a of QUICK_ACTIONS) pill(a.label, `${a.label} the selected text`, () => askAboutSelection(a.id, sel));
+    pill("Ask…", "Ask about this PDF (c)", toggleChat);
+  } else pill("Ask this PDF", "Chat about this PDF and summarise it (c)", toggleChat);
+  const step = 36;
+  items.forEach((el, i) => {
+    place(el, -90 + (i - (items.length - 1) / 2) * step, R_OPTIONS + 4);
+    menu.append(el);
+  });
+}
+
+function pickTool(t: Slot) {
+  if (t === "ai") {
+    if (aiSel) {
+      selected = "ai";
+      showOptions("ai", true);
+    } else {
+      closeRadial();
+      toggleChat();
+    }
+    return;
+  }
   setTool(t);
   selected = t;
   refresh();
@@ -196,13 +244,14 @@ function pickTool(t: Tool) {
   else showOptions(t, true);
 }
 
-export function openRadial(x?: number, y?: number) {
+export function openRadial(x?: number, y?: number, sel: Selected | null = null) {
   if (!getDoc()) return;
+  aiSel = sel;
   const px = x ?? lastPointer?.x ?? window.innerWidth / 2;
   const py = y ?? lastPointer?.y ?? window.innerHeight / 2;
   menu.style.left = `${Math.min(window.innerWidth - EDGE, Math.max(EDGE, px))}px`;
   menu.style.top = `${Math.min(window.innerHeight - EDGE, Math.max(EDGE, py))}px`;
-  selected = getTool();
+  selected = sel ? "ai" : getTool();
   build();
   showOptions(selected, true);
   if (menu.hidden) {
@@ -227,7 +276,7 @@ document.addEventListener("contextmenu", (e) => {
   const t = e.target as HTMLElement;
   if (t.closest("input, textarea, select")) return;
   e.preventDefault(); // no browser menu anywhere in the app
-  if (t.closest("#pages")) openRadial(e.clientX, e.clientY);
+  if (t.closest("#pages")) openRadial(e.clientX, e.clientY, currentSelection());
 });
 
 // Click outside closes it.
@@ -241,16 +290,16 @@ document.addEventListener(
 
 document.addEventListener("pointermove", (e) => (lastPointer = { x: e.clientX, y: e.clientY }), { passive: true });
 
-// Keys while the menu is open: 1–8 pick a tool, ←/→ move between tools, Enter closes.
+// Keys while the menu is open: 1–9 pick a tool (9 = ask Claude), ←/→ move between them, Enter closes.
 window.addEventListener(
   "keydown",
   (e) => {
     if (menu.hidden) return;
-    const i = TOOLS.findIndex((t) => t.id === selected);
+    const i = SLOTS.indexOf(selected);
     let handled = true;
-    if (/^[1-8]$/.test(e.key)) pickTool(TOOLS[Number(e.key) - 1].id);
-    else if (e.key === "ArrowRight" || e.key === "ArrowDown") focusTool((i + 1) % TOOLS.length);
-    else if (e.key === "ArrowLeft" || e.key === "ArrowUp") focusTool((i - 1 + TOOLS.length) % TOOLS.length);
+    if (/^[1-9]$/.test(e.key)) pickTool(SLOTS[Number(e.key) - 1]);
+    else if (e.key === "ArrowRight" || e.key === "ArrowDown") focusTool((i + 1) % SLOTS.length);
+    else if (e.key === "ArrowLeft" || e.key === "ArrowUp") focusTool((i - 1 + SLOTS.length) % SLOTS.length);
     else if (e.key === "Enter" || e.key === " ") {
       const f = document.activeElement as HTMLElement | null;
       if (f && menu.contains(f)) f.click();
@@ -265,7 +314,7 @@ window.addEventListener(
 );
 
 function focusTool(i: number) {
-  selected = TOOLS[i].id;
+  selected = SLOTS[i];
   showOptions(selected);
   menu.querySelector<HTMLElement>(`.tool[data-tool="${selected}"]`)?.focus({ preventScroll: true });
 }

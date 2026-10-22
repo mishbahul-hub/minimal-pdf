@@ -4,7 +4,7 @@ A fast, keyboard-first PDF reader for Windows where **the page is the whole inte
 toolbar: everything appears only when you ask for it and disappears with `Esc`.
 
 Built with [Tauri 2](https://tauri.app) and [PDF.js](https://mozilla.github.io/pdf.js/).
-The installer is about 2 MB, and the installed app about 5.5 MB (it uses the WebView2 that ships with Windows).
+The installer is about 2.4 MB, and the installed app about 6.7 MB (it uses the WebView2 that ships with Windows).
 
 ## Features
 
@@ -21,6 +21,9 @@ The installer is about 2 MB, and the installed app about 5.5 MB (it uses the Web
   on the start screen (press `1`–`9`).
 - **Annotations without a toolbar.** Right-click anywhere on a page for a radial menu around your
   cursor with pen, pencil, highlighter, eraser, rectangle, circle and text comments.
+- **Ask Claude about what you're reading** (optional, with your own API key): select text and
+  right-click to explain, simplify, define or translate it; press `c` to chat with the whole PDF or
+  summarise a page, section or the document, with answers that cite the pages they came from.
 - **Never modifies your PDFs.** Annotations and settings are stored separately (see
   [Where your data lives](#where-your-data-lives)).
 - Opens PDFs by double-click once installed, and reuses the open window.
@@ -49,7 +52,26 @@ While a tool is active:
 | Undo / redo | `Ctrl+Z` / `Ctrl+Y` |
 | Put the tool down | `Esc` |
 
-Inside the open menu, `1`–`8` pick a tool and `Esc` closes it.
+Inside the open menu, `1`–`8` pick a tool, `9` is Claude, and `Esc` closes it.
+
+## AI: ask Claude about the PDF
+
+The AI features are optional and use your own [Claude API key](https://console.anthropic.com/settings/keys).
+The first time you use one, the app asks for the key (change or remove it later with `Ctrl+,`). The key
+is kept in Windows Credential Manager, not in the app's files.
+
+- **Selected text:** select some text, right-click it, and pick **Explain**, **Simplify**, **Define**
+  or **Translate** from the ring. The answer appears in a small card next to the text; you can copy
+  it, **save it as a comment** on the page, or **ask a follow-up** in the chat.
+- **Chat with the PDF** (`c`, or the ✦ button in the ring): ask anything about the document.
+  Claude searches and reads the PDF itself (you see each step, like "Searching 'dropout'" or
+  "Reading pp. 40–42") and answers with page citations such as **p. 42** that jump to the page
+  when clicked. It can also read your own highlights and comments.
+- **Summaries:** summarise this page, this section (from the table of contents) or the whole
+  document. Summaries are saved with the file, so opening one again is instant and free.
+
+**Privacy:** nothing is sent until you ask. Your question, the selected text and the pages Claude
+reads are sent to Anthropic's API; the PDF file itself is never uploaded.
 
 ## Keyboard shortcuts
 
@@ -67,7 +89,9 @@ Inside the open menu, `1`–`8` pick a tool and `Esc` closes it.
 | `d` | Light → dark → sepia |
 | `/` or `Ctrl+F` | Search (`Enter` / `Shift+Enter`, or `n` / `N`, for next / previous match) |
 | `t` | Table of contents |
-| `a` or right-click | Annotation tools |
+| `a` or right-click | Annotation tools (and AI actions on selected text) |
+| `c` | Ask Claude about this PDF: chat and summaries |
+| `Ctrl+,` | Claude API key |
 | `Ctrl+Z` / `Ctrl+Y` | Undo / redo annotations |
 | `1`–`9` | Open a recent file (start screen) |
 | `?` | Show all shortcuts |
@@ -78,7 +102,7 @@ Inside the open menu, `1`–`8` pick a tool and `Esc` closes it.
 Build the installers (see [Development](#development)) and run either one from
 `src-tauri/target/release/bundle/`:
 
-- `nsis/Minimal PDF_0.1.0_x64-setup.exe` (about 2 MB), or
+- `nsis/Minimal PDF_0.1.0_x64-setup.exe` (about 2.4 MB), or
 - `msi/Minimal PDF_0.1.0_x64_en-US.msi`
 
 When a release is published on the [Releases](https://github.com/mishbahul-hub/minimal-pdf/releases)
@@ -91,7 +115,9 @@ WebView2, which the app uses to draw its window. After installing, PDFs get an
 Everything the app saves is in `%APPDATA%\com.islam.minimalpdf\`:
 
 - `settings.json`: theme, recent files, the last position in each file, annotation tool styles
-- `notes-<id>.json`: the annotations for one PDF (the file's path is stored inside it)
+- `notes-<id>.json`: the annotations for one PDF (the file's path is stored inside it), and saved AI summaries
+
+The Claude API key, if you add one, is in Windows Credential Manager (`com.islam.minimalpdf`).
 
 Your PDF files are only ever read, never written.
 
@@ -120,9 +146,11 @@ src/
   outline.ts     table of contents sidebar
   annotate.ts    annotation tools, drawing, undo/redo, storage
   radial.ts      the right-click radial menu
+  ai.ts          Claude features: selection actions, chat (agentic RAG over the PDF), summaries
   styles.css     all styles and themes
 src-tauri/
   src/lib.rs     window sizing, launch file, single instance, recent-file access
+  src/ai.rs      Claude API proxy: API key in the OS credential store, streaming
   tauri.conf.json, capabilities/default.json
 ```
 

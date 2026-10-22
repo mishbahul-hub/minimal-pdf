@@ -1,3 +1,5 @@
+mod ai;
+
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -27,7 +29,16 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(LaunchFile(Mutex::new(None)))
-        .invoke_handler(tauri::generate_handler![allow_recent, take_launch_file])
+        .manage(ai::Streams::default())
+        .invoke_handler(tauri::generate_handler![
+            allow_recent,
+            take_launch_file,
+            ai::ai_has_key,
+            ai::ai_set_key,
+            ai::ai_clear_key,
+            ai::ai_stream,
+            ai::ai_cancel
+        ])
         .setup(|app| {
             let cwd = std::env::current_dir().unwrap_or_default();
             let args: Vec<String> = std::env::args().collect();

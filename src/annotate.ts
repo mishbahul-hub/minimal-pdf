@@ -729,3 +729,53 @@ events.addEventListener("scroll", () => {
 export function getAnnotations() {
   return Object.fromEntries(pages);
 }
+
+// ---------------------------------------------------------------------------
+// For the AI features (ai.ts)
+
+/** Add a text comment at (x, y) on page n with the current text style. Undoable like any edit. */
+export function addComment(n: number, x: number, y: number, text: string) {
+  const s = getStyle("text");
+  const note: Note = { id: newId(), kind: "text", color: s.color, font: s.font ?? "sans", size: 12, x: r2(x), y: r2(y), text };
+  const list = pages.get(n) ?? [];
+  commit({ added: [{ page: n, ann: note, index: list.length }], removed: [] });
+}
+
+export type AnnotationInfo =
+  | { page: number; kind: "comment"; text: string }
+  | { page: number; kind: "highlight" | "pen" | "pencil" | "rect" | "ellipse"; color: string; box: { x: number; y: number; w: number; h: number } };
+
+/** The user's annotations on pages from..to, with each mark's bounding box (page units). */
+export function annotationList(from: number, to: number): AnnotationInfo[] {
+  const out: AnnotationInfo[] = [];
+  for (const n of [...pages.keys()].sort((a, b) => a - b)) {
+    if (n < from || n > to) continue;
+    for (const a of pages.get(n)!) {
+      if (a.kind === "text") out.push({ page: n, kind: "comment", text: a.text });
+      else if (a.kind === "rect" || a.kind === "ellipse") out.push({ page: n, kind: a.kind, color: a.color, box: { x: a.x, y: a.y, w: a.w, h: a.h } });
+      else {
+        const ink = a as Ink;
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        for (let i = 0; i < ink.points.length; i += 2) {
+          x0 = Math.min(x0, ink.points[i]);
+          x1 = Math.max(x1, ink.points[i]);
+          y0 = Math.min(y0, ink.points[i + 1]);
+          y1 = Math.max(y1, ink.points[i + 1]);
+        }
+        const pad = ink.width / 2;
+        const box = { x: x0 - pad, y: y0 - pad, w: x1 - x0 + 2 * pad, h: y1 - y0 + 2 * pad };
+        out.push({ page: n, kind: ink.kind === "highlighter" ? "highlight" : ink.kind, color: ink.color, box });
+      }
+    }
+  }
+  return out;
+}
+
+/** Extra per-file data kept next to the annotations (e.g. saved AI summaries). */
+export async function getDocData<T>(key: string): Promise<T | undefined> {
+  return store?.get<T>(key);
+}
+
+export async function setDocData(key: string, value: unknown) {
+  await store?.set(key, value);
+}

@@ -315,3 +315,76 @@ events.addEventListener("close", () => {
   query = "";
   setStatus("");
 });
+
+// ---------------------------------------------------------------------------
+// Document text for the AI tools (ai.ts)
+
+export type TextHit = { page: number; hits: number; snippet: string };
+
+const STOPWORDS = new Set(
+  "the a an and or of to in on for with by is are was were be been it this that these those as at from what which who how why when where does do did about into than then there their its can".split(" "),
+);
+
+/**
+ * Pages matching a query, best first. The whole phrase counts most; each keyword also counts,
+ * so a question phrased differently from the text still finds the right pages.
+ */
+export async function searchText(q: string, maxResults = 8): Promise<TextHit[]> {
+  const phrase = normalise(q);
+  if (!phrase) return [];
+  const words = [...new Set(phrase.split(" ").filter((w) => w.length > 2 && !STOPWORDS.has(w)))];
+  const scored: (TextHit & { score: number })[] = [];
+  for (let n = 1; n <= getPageCount(); n++) {
+    const idx = await pageIndex(n);
+    const count = (s: string) => {
+      let c = 0;
+      for (let at = idx.text.indexOf(s); at !== -1 && c < 50; at = idx.text.indexOf(s, at + 1)) c++;
+      return c;
+    };
+    const phraseHits = count(phrase);
+    let matched = 0;
+    let wordHits = 0;
+    for (const w of words) {
+      const c = count(w);
+      if (c) matched++;
+      wordHits += c;
+    }
+    if (!phraseHits && !matched) continue;
+    // Snippet around the phrase, or the first keyword found.
+    const at = phraseHits ? idx.text.indexOf(phrase) : (words.map((w) => idx.text.indexOf(w)).find((i) => i >= 0) ?? 0);
+    const snippet = (at > 80 ? "…" : "") + idx.text.slice(Math.max(0, at - 80), at + 160).trim() + "…";
+    scored.push({ page: n, hits: phraseHits + wordHits, snippet, score: phraseHits * 10 + matched * 3 + Math.min(wordHits, 20) * 0.2 });
+    if (n % YIELD_EVERY === 0) await new Promise((r) => setTimeout(r));
+  }
+  scored.sort((a, b) => b.score - a.score || a.page - b.page);
+  return scored.slice(0, maxResults).map(({ page, hits, snippet }) => ({ page, hits, snippet }));
+}
+
+/** A page's text with its original case and line breaks, for reading. */
+export async function pageText(n: number): Promise<string> {
+  const content = await getTextContent(n);
+  if (!content) return "";
+  let out = "";
+  for (const item of content.items) {
+    if (!("str" in item)) continue;
+    out += item.str + (item.hasEOL ? "\n" : "");
+  }
+  return out.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+/** Text items with their boxes on the page (CSS px at zoom 1), e.g. to find highlighted text. */
+export async function textBoxes(n: number): Promise<{ str: string; x: number; y: number; w: number; h: number }[]> {
+  const content = await getTextContent(n);
+  const page = getPdfPage(n);
+  if (!content || !page) return [];
+  const scale = pdfjs.PixelsPerInch.PDF_TO_CSS_UNITS;
+  const vp = page.getViewport({ scale });
+  const boxes = [];
+  for (const item of content.items) {
+    if (!("str" in item) || !item.str.trim()) continue;
+    const [x, y] = vp.convertToViewportPoint(item.transform[4], item.transform[5]);
+    const h = Math.hypot(item.transform[2], item.transform[3]) * scale;
+    boxes.push({ str: item.str, x, y: y - h, w: item.width * scale, h });
+  }
+  return boxes;
+}
