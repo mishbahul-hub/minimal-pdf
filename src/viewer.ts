@@ -590,6 +590,7 @@ function fitZoom(mode: ZoomMode): number {
 function applySizes() {
   // Text layers (and anything else sized in PDF units) scale with this variable, without re-rendering.
   scroller.style.setProperty("--total-scale-factor", String(zoom * CSS_UNITS));
+  scroller.style.setProperty("--zoom", String(zoom)); // annotation text and editors scale with this
   for (const s of slots) {
     s.el.style.width = `${s.baseW * zoom}px`;
     s.el.style.height = `${s.baseH * zoom}px`;

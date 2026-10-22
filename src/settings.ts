@@ -28,6 +28,15 @@ const THEME_CACHE_KEY = "theme"; // localStorage mirror so the theme applies bef
 
 const storeReady: Promise<Store> = load("settings.json", { autoSave: 300, defaults: {} });
 
+/** Generic access to the settings store for other modules (e.g. annotation tool styles). */
+export async function getSetting<T>(key: string): Promise<T | undefined> {
+  return (await (await storeReady).get<T>(key)) ?? undefined;
+}
+
+export async function setSetting(key: string, value: unknown) {
+  await (await storeReady).set(key, value);
+}
+
 // ---------------------------------------------------------------------------
 // Theme
 

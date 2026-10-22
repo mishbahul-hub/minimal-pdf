@@ -17,6 +17,8 @@ import { closeTopOverlay, openGoTo, toggleHelp } from "./overlays";
 import { cycleTheme, openRecent } from "./settings";
 import { nextMatch, openSearch, prevMatch, searchActive } from "./search";
 import { toggleOutline } from "./outline";
+import { dropTool, redo, undo } from "./annotate";
+import { openRadial } from "./radial";
 
 type Action = (e: KeyboardEvent) => void | Promise<unknown>;
 
@@ -52,6 +54,9 @@ export const KEYMAP: Binding[] = [
   { keys: ["d"], label: "d", help: "Cycle theme (light, dark, sepia)", action: cycleTheme },
   { keys: ["/", "Ctrl+f"], label: "/", help: "Search (Enter / Shift+Enter: next / previous match)", action: openSearch },
   { keys: ["t"], label: "t", help: "Table of contents", action: toggleOutline },
+  { keys: ["a"], label: "a / right-click", help: "Annotation tools (pen, highlighter, shapes, text…)", action: () => openRadial() },
+  { keys: ["Ctrl+z"], label: "Ctrl+Z", help: "Undo annotation", action: undo, repeat: true },
+  { keys: ["Ctrl+y", "Ctrl+Shift+z"], label: "Ctrl+Y", help: "Redo annotation", action: redo, repeat: true },
   {
     keys: ["1", "2", "3", "4", "5", "6", "7", "8", "9"],
     label: "1–9",
@@ -59,14 +64,15 @@ export const KEYMAP: Binding[] = [
     action: (e) => openRecent(Number(e.key)),
   },
   { keys: ["?"], label: "?", help: "Show shortcut help", action: () => toggleHelp(KEYMAP) },
-  { keys: ["Escape"], label: "Esc", help: "Close overlay / leave fullscreen", action: escape },
+  { keys: ["Escape"], label: "Esc", help: "Close overlay / put the tool down / leave fullscreen", action: escape },
 ];
 
 const SEQUENCE_MS = 500; // time allowed between the keys of "g g"
 const MODIFIERS = new Set(["Control", "Shift", "Alt", "Meta"]);
 
 function escape() {
-  if (!closeTopOverlay()) return exitFullscreen();
+  if (closeTopOverlay() || dropTool()) return;
+  return exitFullscreen();
 }
 
 /**
@@ -78,7 +84,8 @@ function keyName(e: KeyboardEvent): string {
   const ctrl = e.ctrlKey || e.metaKey;
   let key = e.key === " " ? "Space" : e.key;
   if (ctrl && key.length === 1) key = key.toLowerCase();
-  const shift = e.shiftKey && key.length > 1 ? "Shift+" : "";
+  // Shift is part of e.key for printable keys ("G", "?"), except letters with Ctrl ("Ctrl+Shift+z").
+  const shift = e.shiftKey && (key.length > 1 || (ctrl && /^[a-z]$/.test(key))) ? "Shift+" : "";
   return (ctrl ? "Ctrl+" : "") + shift + key;
 }
 

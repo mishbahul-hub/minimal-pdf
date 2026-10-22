@@ -3,11 +3,11 @@
 Minimalist, keyboard-first desktop PDF reader built with **Tauri 2 + vanilla TypeScript + PDF.js**.
 The page is the whole interface. Targets: opens instantly, stays out of the way, installer under ~10 MB.
 
-**Current stage: annotations (right-click radial menu), then 6 (ship).** Stages 0–5 done. Update this line when a stage's "done when" check passes.
+**Current stage: 6 (Polish, test and ship).** Stages 0–5 and annotations done. Update this line when a stage's "done when" check passes.
 
 ## Design principles (do not violate)
 
-- **The page is the UI.** No toolbar by default; controls (search bar, go-to box, sidebar, help) appear only on demand and close with `Esc`.
+- **The page is the UI.** No toolbar, ever: controls (search bar, go-to box, sidebar, help, the right-click radial menu) appear only on demand and close with `Esc`. Annotation tools live only in the radial menu (right-click or `a`), never in a top bar.
 - **Keyboard first, mouse friendly.** Every feature must be reachable from the keyboard.
 - **Render only what is visible.** Never render all pages of a large PDF up front (after Stage 1).
 - **Never modify the user's PDF.** Only read it. All app data goes in the settings store (or sidecar JSON for future notes).
@@ -51,6 +51,8 @@ src/
   settings.ts    store: theme, per-file positions, recent files
   search.ts      text search + highlights
   outline.ts     table of contents sidebar
+  annotate.ts    annotation tools (pen, pencil, highlighter, eraser, rect, ellipse, text comments), SVG layers, undo/redo, per-file notes store
+  radial.ts      right-click radial menu: tools on the inner ring, colours/sizes on the outer ring (the only annotation UI)
   styles.css
   vite-env.d.ts  Vite client types (needed for CSS and `?url` imports under TS 6)
 index.html
@@ -90,6 +92,8 @@ Keep each concern in its own module as above. Don't create new top-level modules
 - **Outline**: `outline.ts` builds the tree lazily on first `t`; resolves string dests via `getDestination()`, explicit dests via `getPageIndex(ref) + 1` (or a numeric page index). Arrow keys / j k / Home End / Enter inside the tree, with `stopPropagation` so global shortcuts don't also fire. No outline → plain page list.
 - **Tests and saved positions**: the app restores each file's last position, including files opened by tests with `openBytes(data, name)` (key = name). Tests must navigate explicitly (e.g. `goToPage(1)`) rather than assume a file opens at page 1.
 - **Errors**: corrupt/renamed and password-protected files must show a clear message, never crash.
+- **Annotations**: stored per file in the app data folder as `notes-<fnv1a(path)>.json` (plugin-store), keyed by page; never written into the PDF. Coordinates are page units (CSS px at zoom 1); each page gets an `svg.ink` with `viewBox` = page size, so ink scales with zoom for free. The ink layer shares `--page-filter` and blends (`multiply`, `screen` in dark) so black ink stays visible on dark pages. A stroke only accepts moves from the pointer that started it. Text comments are SVG `<text>` (hanging baseline, 1.25 line height); editing uses an on-page textarea + a small font/size/colour bar, sized with `--zoom`. Undo/redo ops are `{ added, removed }` item lists (an edit = remove + add). Tool styles persist in settings (`annotationStyles`); the active tool resets to pointer on launch. Right-click anywhere except text fields never shows the browser menu.
+- **Dev server hygiene**: stopping a background `tauri dev` can leave Vite on port 1420; kill leftover `node … vite` processes for this project before relaunching, or the new run fails with "Port 1420 is already in use". Modules served after edits carry `?t=` timestamps: tests must import the same URLs the app loaded (see `performance.getEntriesByType("resource")`), or they get a second module instance.
 
 ## Keymap
 
@@ -107,6 +111,8 @@ Keep each concern in its own module as above. Don't create new top-level modules
 | d | Cycle theme |
 | / | Search (Enter / Shift+Enter or n / N for next / prev match) |
 | t | Table of contents |
+| a / right-click | Annotation tools (radial menu); inside it 1–8 pick a tool |
+| Ctrl+Z / Ctrl+Y | Undo / redo annotation |
 | ? | Shortcut help |
 | Esc | Close any overlay |
 

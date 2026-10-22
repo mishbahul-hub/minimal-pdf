@@ -8,6 +8,15 @@
   </head>
 
   <body>
+    <!-- Shared SVG filters for annotations -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <filter id="pencil-grain" x="-5%" y="-5%" width="110%" height="110%">
+        <feTurbulence type="fractalNoise" baseFrequency="1.4" numOctaves="1" seed="3" result="noise" />
+        <feColorMatrix in="noise" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -1.6 1.35" result="grain" />
+        <feComposite in="SourceGraphic" in2="grain" operator="in" />
+      </filter>
+    </svg>
+
     <main id="pages"></main>
     <div id="message" hidden></div>
     <div id="indicator"></div>
