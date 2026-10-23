@@ -82,7 +82,7 @@ function build() {
     b.type = "button";
     b.className = id === "ai" ? "tool ai" : "tool";
     b.dataset.tool = id;
-    b.title = `${id === "ai" ? "Ask Claude" : TOOLS[i].label} (${i + 1})`;
+    b.title = `${id === "ai" ? "Ask AI" : TOOLS[i].label} (${i + 1})`;
     b.setAttribute("role", "menuitemradio");
     b.innerHTML = icon(id);
     place(b, -90 + (i * 360) / SLOTS.length, R_TOOLS);

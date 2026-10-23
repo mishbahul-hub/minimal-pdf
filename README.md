@@ -21,9 +21,10 @@ The installer is about 3 MB, and the installed app about 8.5 MB (it uses the Web
   on the start screen (press `1`–`9`).
 - **Annotations without a toolbar.** Right-click anywhere on a page for a radial menu around your
   cursor with pen, pencil, highlighter, eraser, rectangle, circle and text comments.
-- **Ask Claude about what you're reading** (optional, with your own API key): select text and
-  right-click to explain, simplify, define or translate it; press `c` to chat with the whole PDF or
-  summarise a page, section or the document, with answers that cite the pages they came from.
+- **Ask AI about what you're reading** (optional, works with free keys from Google AI Studio,
+  Groq, Hugging Face or OpenRouter, with Ollama offline, or with Claude): select text and right-click
+  to explain, simplify, define or translate it; press `c` to chat with the whole PDF or summarise a
+  page, section or the document, with answers that cite the pages they came from.
 - **Never modifies your PDFs.** Annotations and settings are stored separately (see
   [Where your data lives](#where-your-data-lives)).
 - Opens PDFs by double-click once installed, and reuses the open window.
@@ -52,26 +53,123 @@ While a tool is active:
 | Undo / redo | `Ctrl+Z` / `Ctrl+Y` |
 | Put the tool down | `Esc` |
 
-Inside the open menu, `1`–`8` pick a tool, `9` is Claude, and `Esc` closes it.
+Inside the open menu, `1`–`8` pick a tool, `9` is the AI, and `Esc` closes it.
 
-## AI: ask Claude about the PDF
+## AI: ask questions about the PDF
 
-The AI features are optional and use your own [Claude API key](https://console.anthropic.com/settings/keys).
-The first time you use one, the app asks for the key (change or remove it later with `Ctrl+,`). The key
-is kept in Windows Credential Manager, not in the app's files.
+The AI features are optional. They work with **free API keys** from several providers, with a
+model running on your own computer, or with Claude. The first time you use one, the app asks which
+provider to use. Change it any time with `Ctrl+,`.
 
 - **Selected text:** select some text, right-click it, and pick **Explain**, **Simplify**, **Define**
   or **Translate** from the ring. The answer appears in a small card next to the text; you can copy
   it, **save it as a comment** on the page, or **ask a follow-up** in the chat.
-- **Chat with the PDF** (`c`, or the ✦ button in the ring): ask anything about the document.
-  Claude searches and reads the PDF itself (you see each step, like "Searching 'dropout'" or
+- **Chat with the PDF** (`c`, or the ✦ button in the ring): ask anything about the document. The
+  AI searches and reads the PDF itself (you see each step, like "Searching 'dropout'" or
   "Reading pp. 40–42") and answers with page citations such as **p. 42** that jump to the page
   when clicked. It can also read your own highlights and comments.
 - **Summaries:** summarise this page, this section (from the table of contents) or the whole
   document. Summaries are saved with the file, so opening one again is instant and free.
 
-**Privacy:** nothing is sent until you ask. Your question, the selected text and the pages Claude
-reads are sent to Anthropic's API; the PDF file itself is never uploaded.
+### Choosing a provider
+
+| Provider | Cost | Get a key |
+|---|---|---|
+| **Google AI Studio (Gemini)** | free tier | [aistudio.google.com](https://aistudio.google.com/app/apikey) → *Get API key* |
+| **Groq** | free tier, very fast | [console.groq.com](https://console.groq.com/keys) → *API Keys* |
+| **Hugging Face** | free monthly credits | [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens): a token with *Make calls to Inference Providers* |
+| **OpenRouter** | free models (ending in `:free`) | [openrouter.ai/keys](https://openrouter.ai/keys) |
+| **Ollama** | free, offline, on your computer | no key: install [Ollama](https://ollama.com), then `ollama pull llama3.2` |
+| **Anthropic Claude** | paid | [console.anthropic.com](https://console.anthropic.com/settings/keys) |
+| **Other** | any service with an OpenAI-compatible API | enter its address (base URL) and key |
+
+In the `Ctrl+,` dialog, pick the provider, paste the key, and press **Load models** to choose
+from the models that provider offers right now (model names change often; the app suggests a
+default). **Save and test** sends a one-word test request before saving.
+
+Keys are kept in **Windows Credential Manager**, never in the app's files. The provider, model and
+address go in `settings.json`.
+
+Free tiers limit how much text you can send per minute, so with Groq, Hugging Face, OpenRouter and
+Ollama the app sends fewer pages per request. If you see "too many requests", wait a minute.
+
+**Privacy:** nothing is sent until you ask. Your question, the selected text and the pages the AI
+reads go to the provider you chose; with Ollama nothing leaves your computer. The PDF file itself
+is never uploaded.
+
+## How the RAG pipeline works
+
+RAG (*retrieval-augmented generation*) means the AI answers from passages **retrieved from your
+document** instead of from memory. Minimal PDF uses **agentic RAG**: instead of the app guessing
+which passages are relevant and pasting them in, the model gets *tools* to search and read the
+PDF, and decides for itself what to look up, as a person would with a book's index.
+
+```mermaid
+flowchart TD
+    Q["Your question<br/>(+ the page you're on)"] --> M{{"AI model"}}
+    M -- "search_document('dropout rate')" --> S["Keyword search over the<br/>PDF's text index"]
+    S -- "best pages + snippets" --> M
+    M -- "read_pages(40, 42)" --> R["Full text of those pages"]
+    R --> M
+    M -- "get_outline() / get_annotations()" --> O["Table of contents,<br/>your highlights and comments"]
+    O --> M
+    M -- "enough to answer" --> A["Answer with citations [p. 41]"]
+    A --> L["Citations become links<br/>that jump to the page"]
+```
+
+**1. Text extraction and index.** PDF.js extracts the text of each page (the same text layer you
+can select). For search, each page's text is normalised (lower case, runs of spaces and line breaks
+collapsed into one space) and kept with a map back to the exact characters, so a phrase split
+across lines still matches. Pages are indexed on demand and cached
+([search.ts](src/search.ts)).
+
+**2. Retrieval.** `search_document` scores every page: the whole phrase counts most (×10), then each
+keyword found on the page (×3), then the number of hits (×0.2, capped). Common words like "the" or
+"which" are ignored. It returns the best pages with a snippet around the match.
+
+**3. The agent loop.** The model sees four tools:
+
+| Tool | What it returns |
+|---|---|
+| `search_document(query)` | best-matching pages, with snippets |
+| `read_pages(first, last)` | the full text of a few pages |
+| `get_outline()` | the table of contents with page numbers |
+| `get_annotations(first, last)` | your highlights (with the text under them), drawings and comments |
+
+It calls them as often as it needs, up to 12 rounds (24 for a whole-document summary). If a search
+finds nothing, it tries other words. Each call shows up as a step in the chat ("Searching…",
+"Reading pp. 40–42"), so you can see where an answer came from.
+
+**4. A grounded answer.** The instructions tell the model to answer only from text it has read and
+to cite pages as `[p. 41]` or `[pp. 40–42]`. The app turns those into links that jump to the page
+and flash it. If the document doesn't cover the question, the model says so.
+
+**5. Shortcuts and fallbacks.**
+- *Short documents* (a paper of a few pages) go into the prompt whole, so most questions need no
+  tool calls at all. With Claude this part is cached, so follow-up questions are cheaper.
+- *Models that can't use tools* (some small or local models) get **simple RAG**: the app runs the
+  keyword search itself and sends the best pages along with the question. The chat says when this
+  happens.
+- *Free tiers* get a smaller budget per request (fewer pages per read).
+
+**Why no vector database or embeddings?** Classic RAG splits the document into chunks, turns each
+into an embedding vector and looks up the nearest chunks. This app skips that on purpose:
+
+- No setup, no extra model and no extra cost: the index is built locally, instantly, from text
+  PDF.js already extracted.
+- It works offline with Ollama.
+- Answers quote exact text with exact page numbers, because whole pages are read rather than
+  scattered chunks.
+- The agent makes up for the main weakness of keyword search, different words for the same idea,
+  by searching again with other terms.
+
+**Limitations.** Scanned PDFs have no text layer, so there is nothing to search or read. Synonyms
+depend on the model trying other words. Very long documents can't be read in full in one answer,
+so whole-document summaries rely on the table of contents and the main sections.
+
+The code: the agent loop and tools are in [src/ai.ts](src/ai.ts), the provider adapters
+(Anthropic Messages and OpenAI-compatible Chat Completions) in [src/llm.ts](src/llm.ts), and the
+key handling and streaming in [src-tauri/src/ai.rs](src-tauri/src/ai.rs).
 
 ## Keyboard shortcuts
 
@@ -90,8 +188,8 @@ reads are sent to Anthropic's API; the PDF file itself is never uploaded.
 | `/` or `Ctrl+F` | Search (`Enter` / `Shift+Enter`, or `n` / `N`, for next / previous match) |
 | `t` | Table of contents |
 | `a` or right-click | Annotation tools (and AI actions on selected text) |
-| `c` | Ask Claude about this PDF: chat and summaries |
-| `Ctrl+,` | Claude API key |
+| `c` | Ask AI about this PDF: chat and summaries |
+| `Ctrl+,` | AI provider and API key |
 | `Ctrl+Z` / `Ctrl+Y` | Undo / redo annotations |
 | `1`–`9` | Open a recent file (start screen) |
 | `?` | Show all shortcuts |
@@ -120,7 +218,7 @@ Everything the app saves is in `%APPDATA%\com.islam.minimalpdf\`:
 - `settings.json`: theme, recent files, the last position in each file, annotation tool styles
 - `notes-<id>.json`: the annotations for one PDF (the file's path is stored inside it), and saved AI summaries
 
-The Claude API key, if you add one, is in Windows Credential Manager (`com.islam.minimalpdf`).
+AI provider keys, if you add any, are in Windows Credential Manager (`com.islam.minimalpdf`).
 
 Your PDF files are only ever read, never written.
 
@@ -161,11 +259,12 @@ src/
   annotate.ts    annotation tools, drawing, undo/redo, storage
   radial.ts      the right-click radial menu
   update.ts      update check and install prompt
-  ai.ts          Claude features: selection actions, chat (agentic RAG over the PDF), summaries
+  ai.ts          AI features: selection actions, chat (agentic RAG over the PDF), summaries, provider dialog
+  llm.ts         AI providers: Anthropic and OpenAI-compatible adapters, streaming
   styles.css     all styles and themes
 src-tauri/
   src/lib.rs     window sizing, launch file, single instance, recent-file access
-  src/ai.rs      Claude API proxy: API key in the OS credential store, streaming
+  src/ai.rs      AI proxy: per-provider keys in the OS credential store, streaming
   tauri.conf.json, capabilities/default.json
 ```
 

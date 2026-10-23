@@ -38,7 +38,8 @@ pub fn run() {
             ai::ai_set_key,
             ai::ai_clear_key,
             ai::ai_stream,
-            ai::ai_cancel
+            ai::ai_cancel,
+            ai::ai_models
         ])
         .setup(|app| {
             let cwd = std::env::current_dir().unwrap_or_default();

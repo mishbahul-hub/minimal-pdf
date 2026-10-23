@@ -1310,7 +1310,7 @@ svg.ink text {
 }
 
 #ai-key form {
-  width: min(440px, 100%);
+  width: min(480px, 100%);
   padding: 18px 20px;
   font-size: 14px;
 }
@@ -1325,8 +1325,37 @@ svg.ink text {
   color: var(--muted);
 }
 
-#ai-key input {
+#ai-key label {
+  display: block;
+  margin-top: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+#ai-key label[hidden] {
+  display: none;
+}
+
+#ai-key p.hint {
+  margin: 4px 0 0;
+  font-size: 12px;
+}
+
+#ai-key .model-row {
+  display: flex;
+  gap: 6px;
+}
+
+#ai-key .model-row button {
+  flex: none;
+  margin-top: 4px;
+}
+
+#ai-key input,
+#ai-key select {
   width: 100%;
+  margin-top: 4px;
   box-sizing: border-box;
   padding: 7px 10px;
   font: inherit;
@@ -1337,7 +1366,8 @@ svg.ink text {
   outline: none;
 }
 
-#ai-key input:focus {
+#ai-key input:focus,
+#ai-key select:focus {
   border-color: var(--accent);
 }
 
@@ -1365,6 +1395,7 @@ svg.ink text {
 }
 
 #ai-key .status {
+  flex: 1;
   font-size: 12px;
   color: var(--muted);
 }

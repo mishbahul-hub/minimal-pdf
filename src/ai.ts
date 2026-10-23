@@ -1,232 +1,184 @@
-// AI features with Claude: ask about selected text, chat with the PDF and summaries.
-// Chat is agentic RAG: Claude gets tools that search and read this document (search_document, read_pages,
-// get_outline, get_annotations), decides what to look up, and cites the pages it read as [p. N].
-// Requests go through Rust (ai.rs), which holds the API key; nothing is sent until the user asks.
-import { Channel, invoke } from "@tauri-apps/api/core";
+// AI features: ask about selected text, chat with the PDF and summaries, with any provider (llm.ts).
+// Chat is agentic RAG: the model gets tools that search and read this document (search_document,
+// read_pages, get_outline, get_annotations), decides what to look up, and cites the pages it read as
+// [p. N]. Models without tool calling get simple RAG: the app searches first and sends the best pages.
+// Requests go through Rust (ai.rs), which holds the API keys; nothing is sent until the user asks.
 import { events, getCurrentPage, getDoc, getPageCount, getPageElement, getPageSize, goToPage, showIndicator } from "./viewer";
 import { registerOverlay, unregisterOverlay } from "./overlays";
 import { pageText, searchText, textBoxes } from "./search";
 import { getOutlineItems, sectionAt } from "./outline";
 import { addComment, annotationList, getDocData, setDocData } from "./annotate";
 import { getSetting, setSetting } from "./settings";
+import {
+  AiError,
+  callModel,
+  cancel,
+  clearKey,
+  getAiConfig,
+  hasKey,
+  listModels,
+  providerInfo,
+  PROVIDERS,
+  saveKey,
+  setAiConfig,
+  textOf,
+  type Block,
+  type Message,
+  type ProviderId,
+  type Run,
+  type Tool,
+} from "./llm";
 
-const MODEL = "claude-opus-5-5";
-// Refusal fallbacks to another model, and short progress notes between tool calls.
-const BETAS = ["server-side-fallback-2026-07-01", "thinking-display-updates-2026-08-18"];
 const MAX_STEPS = 12; // tool rounds per question (summaries get more)
-const READ_LIMIT = 40_000; // characters returned by one read_pages call
-const READ_PAGES = 8; // pages returned by one read_pages call
-const INLINE_LIMIT = 60_000; // documents shorter than this go into the prompt whole
-const INLINE_MAX_PAGES = 60;
+const SIMPLE_RAG_PAGES = 4; // pages sent to models without tool calling
 const LANGUAGES = ["English", "Bengali", "Hindi", "Urdu", "Arabic", "Spanish", "French", "German", "Chinese", "Japanese"];
 
-// ---------------------------------------------------------------------------
-// Claude API (streamed through Rust)
+/** How much text one request may carry. Free tiers have small per-minute token limits. */
+type Budget = { readPages: number; readChars: number; inlineChars: number; inlinePages: number };
+const LARGE: Budget = { readPages: 8, readChars: 40_000, inlineChars: 60_000, inlinePages: 60 };
+const SMALL: Budget = { readPages: 3, readChars: 12_000, inlineChars: 12_000, inlinePages: 12 };
 
-type Block = { type: string; [k: string]: unknown };
-type Message = { role: "user" | "assistant"; content: string | Block[] };
-type Reply = { content: Block[]; stopReason: string | null };
-type Run = { cancelled: boolean; requestId?: string };
-
-export class AiError extends Error {
-  constructor(
-    public kind: string,
-    message: string,
-  ) {
-    super(message);
-  }
-}
-
-let requestSeq = 0;
-
-/**
- * One streamed Messages API call. `onText` gets the reply's text so far; `onUpdate` gets the
- * progress notes Claude writes between tool calls. Resolves with the complete content blocks.
- */
-async function callClaude(
-  body: Record<string, unknown>,
-  run: Run,
-  on: { onText?: (text: string) => void; onUpdate?: (text: string) => void } = {},
-  betas = BETAS,
-): Promise<Reply> {
-  const requestId = `r${++requestSeq}`;
-  run.requestId = requestId;
-  const blocks: Block[] = [];
-  const json = new Map<number, string>();
-  let stopReason: string | null = null;
-  let streamError: AiError | null = null;
-  let done = () => {};
-  const finished = new Promise<void>((r) => (done = r));
-
-  const channel = new Channel<string>();
-  channel.onmessage = (data) => {
-    if (data === "[DONE]") return done();
-    let ev;
-    try {
-      ev = JSON.parse(data);
-    } catch {
-      return;
-    }
-    if (ev.type === "content_block_start") {
-      blocks[ev.index] = { ...ev.content_block };
-      if (ev.content_block.type === "tool_use") json.set(ev.index, "");
-    } else if (ev.type === "content_block_delta") {
-      const b = blocks[ev.index];
-      const d = ev.delta;
-      if (!b) return;
-      if (d.type === "text_delta") {
-        b.text = ((b.text as string) ?? "") + d.text;
-        on.onText?.(textOf(blocks));
-      } else if (d.type === "thinking_delta") {
-        b.thinking = ((b.thinking as string) ?? "") + d.thinking;
-        if ((b.thinking as string).trim()) on.onUpdate?.(b.thinking as string);
-      } else if (d.type === "signature_delta") {
-        b.signature = ((b.signature as string) ?? "") + d.signature;
-      } else if (d.type === "input_json_delta") {
-        json.set(ev.index, (json.get(ev.index) ?? "") + d.partial_json);
-      }
-    } else if (ev.type === "content_block_stop") {
-      const b = blocks[ev.index];
-      if (b?.type === "tool_use") {
-        // Tool input streams as JSON fragments; it can be cut short, so parse defensively.
-        try {
-          b.input = JSON.parse(json.get(ev.index) || "{}");
-        } catch {
-          b.input = {};
-          b.invalid = true;
-        }
-      }
-    } else if (ev.type === "message_delta") {
-      stopReason = ev.delta?.stop_reason ?? stopReason;
-    } else if (ev.type === "error") {
-      const kind = ev.error?.type === "overloaded_error" ? "overloaded" : "api";
-      streamError = new AiError(kind, ev.error?.message ?? "Claude reported an error.");
-    }
-  };
-
-  try {
-    await invoke("ai_stream", { requestId, body: JSON.stringify(body), betas, onEvent: channel });
-  } catch (e) {
-    const info = e as { kind?: string; message?: string };
-    throw new AiError(info.kind ?? "api", info.message ?? String(e));
-  }
-  await finished;
-  if (streamError) throw streamError;
-  if (run.cancelled) throw new AiError("cancelled", "Stopped.");
-  return { content: blocks.filter(Boolean), stopReason };
-}
-
-function cancel(run: Run) {
-  run.cancelled = true;
-  if (run.requestId) void invoke("ai_cancel", { requestId: run.requestId });
-}
-
-function textOf(blocks: Block[]) {
-  return blocks
-    .filter((b) => b?.type === "text")
-    .map((b) => b.text as string)
-    .join("");
-}
-
-/**
- * The assistant turn to send back next time. After a refusal fallback mid-reply, blocks before the
- * last `fallback` marker other than text belong to the declined model and must be left out.
- */
-function echoable(content: Block[]): Block[] {
-  const last = content.map((b) => b.type).lastIndexOf("fallback");
-  return content
-    .filter((b, i) => b.type !== "fallback" && !(i < last && ["thinking", "redacted_thinking", "tool_use"].includes(b.type)))
-    .map(({ invalid: _invalid, ...b }) => b as Block);
+async function budget(): Promise<Budget> {
+  return providerInfo((await getAiConfig()).provider).small ? SMALL : LARGE;
 }
 
 // ---------------------------------------------------------------------------
-// API key
-
-let keyKnown: boolean | null = null;
-
-async function hasKey() {
-  keyKnown ??= await invoke<boolean>("ai_has_key");
-  return keyKnown;
-}
+// AI provider and key (Ctrl+,)
 
 const keyEl = document.createElement("div");
 keyEl.id = "ai-key";
 keyEl.hidden = true;
 keyEl.innerHTML = `
   <form class="panel">
-    <h2>Connect Claude</h2>
-    <p>AI features use your own Claude API key. Create one at <b>console.anthropic.com</b> → API keys, then paste it here.
-    It is kept in Windows Credential Manager, not in the app's files.</p>
-    <input type="password" placeholder="sk-ant-…" autocomplete="off" spellcheck="false" />
+    <h2>AI provider</h2>
+    <p>Use a free key from Google AI Studio, Groq, Hugging Face or OpenRouter, a model running on this
+    computer with Ollama, or Claude. Keys are kept in Windows Credential Manager, not in the app's files.</p>
+    <label>Provider <select name="provider"></select></label>
+    <p class="hint"></p>
+    <label class="url-row">Address <input name="url" type="text" autocomplete="off" spellcheck="false" /></label>
+    <label>Model
+      <span class="model-row">
+        <input name="model" type="text" list="ai-models" autocomplete="off" spellcheck="false" />
+        <button type="button" class="load">Load models</button>
+      </span>
+    </label>
+    <datalist id="ai-models"></datalist>
+    <label class="key-row">API key <input name="key" type="password" autocomplete="off" spellcheck="false" /></label>
     <div class="row">
-      <button type="submit" class="primary">Save key</button>
+      <button type="submit" class="primary">Save and test</button>
       <button type="button" class="remove">Remove key</button>
       <span class="status" aria-live="polite"></span>
     </div>
   </form>`;
 document.body.append(keyEl);
 const keyForm = keyEl.querySelector("form")!;
-const keyInput = keyEl.querySelector("input")!;
+const providerSel = keyEl.querySelector<HTMLSelectElement>('[name="provider"]')!;
+const urlInput = keyEl.querySelector<HTMLInputElement>('[name="url"]')!;
+const modelInput = keyEl.querySelector<HTMLInputElement>('[name="model"]')!;
+const keyInput = keyEl.querySelector<HTMLInputElement>('[name="key"]')!;
+const modelList = keyEl.querySelector<HTMLDataListElement>("#ai-models")!;
+const keyHint = keyEl.querySelector<HTMLElement>(".hint")!;
 const keyStatus = keyEl.querySelector<HTMLElement>(".status")!;
+for (const p of PROVIDERS) providerSel.append(new Option(p.label, p.id));
 let afterKey: (() => void) | null = null;
 
-/** Show the key setup (Ctrl+,). `then` runs once a working key is saved. */
-export function openKeySetup(then?: () => void) {
+/** Show the provider settings (Ctrl+,). `then` runs once a working provider is saved. */
+export async function openKeySetup(then?: () => void) {
   afterKey = then ?? null;
-  keyInput.value = "";
-  keyStatus.textContent = keyKnown ? "A key is saved. Paste a new one to replace it." : "";
+  const c = await getAiConfig();
+  providerSel.value = c.provider;
+  await showProvider(c.model);
   if (keyEl.hidden) {
     keyEl.hidden = false;
     registerOverlay(keyEl, closeKeySetup);
   }
-  keyInput.focus();
+  (keyInput.closest("label")!.hidden ? modelInput : keyInput).focus();
 }
 
-function closeKeySetup() {
-  if (keyEl.hidden) return;
-  keyEl.hidden = true;
-  unregisterOverlay(keyEl);
-  afterKey = null;
+/** Fill the form for the selected provider. */
+async function showProvider(model?: string) {
+  const p = providerInfo(providerSel.value as ProviderId);
+  const saved = await hasKey(p.id);
+  keyHint.textContent = p.keyHint;
+  urlInput.closest("label")!.hidden = !p.editableUrl;
+  urlInput.value = "";
+  urlInput.placeholder = p.baseUrl ?? "https://api.example.com/v1";
+  modelInput.value = model ?? p.defaultModel;
+  modelInput.placeholder = p.defaultModel || "model name";
+  modelList.replaceChildren();
+  keyInput.value = "";
+  keyInput.placeholder = saved ? "Saved. Paste a new key to replace it." : p.keyOptional ? "Optional" : "Paste your API key";
+  keyStatus.textContent = "";
 }
+
+providerSel.addEventListener("change", async () => {
+  const c = await getAiConfig();
+  await showProvider(c.provider === providerSel.value ? c.model : undefined);
+});
+
+/** Save what was typed for this provider: the key, and the address for Ollama / custom endpoints. */
+async function saveTyped(id: ProviderId) {
+  const p = providerInfo(id);
+  const key = keyInput.value.trim();
+  const url = urlInput.value.trim();
+  if (key || url || (p.keyOptional && !(await hasKey(id)))) await saveKey(id, key, url || p.baseUrl);
+  else if (!(await hasKey(id))) throw new AiError("no_key", "Paste your API key first.");
+  keyInput.value = "";
+}
+
+keyEl.querySelector(".load")!.addEventListener("click", async () => {
+  const id = providerSel.value as ProviderId;
+  keyStatus.textContent = "Loading models…";
+  try {
+    await saveTyped(id);
+    const models = await listModels(id);
+    modelList.replaceChildren(...models.map((m) => new Option(m, m)));
+    keyStatus.textContent = models.length ? `${models.length} models: pick one in the Model box.` : "The provider listed no models.";
+    modelInput.focus();
+  } catch (e) {
+    keyStatus.textContent = friendly(e);
+  }
+});
 
 keyForm.addEventListener("submit", async (e) => {
   e.preventDefault();
-  const key = keyInput.value.trim();
-  if (!key) return;
+  const id = providerSel.value as ProviderId;
+  const p = providerInfo(id);
+  const model = modelInput.value.trim() || p.defaultModel;
+  if (!model) {
+    keyStatus.textContent = "Enter a model name (or use Load models).";
+    return;
+  }
   keyStatus.textContent = "Checking…";
   try {
-    await invoke("ai_set_key", { key });
-    keyKnown = true;
-    // A tiny request proves the key works before the user relies on it.
-    await callClaude(
-      { model: MODEL, max_tokens: 256, stream: true, output_config: { effort: "low" }, messages: [{ role: "user", content: "Reply with OK." }] },
-      { cancelled: false },
-      {},
-      [],
-    );
+    await saveTyped(id);
+    // A tiny request proves the key and model work before the user relies on them.
+    const cfg = { provider: id, model };
+    await callModel({ system: [], messages: [{ role: "user", content: "Reply with OK." }], maxTokens: 256, effort: "low" }, { cancelled: false }, {}, cfg);
+    const changed = (await getAiConfig()).provider !== id || (await getAiConfig()).model !== model;
+    await setAiConfig(cfg);
+    if (changed) resetChat();
     const then = afterKey;
     closeKeySetup();
-    showIndicator("Claude connected");
+    showIndicator(`${p.label} connected`);
     then?.();
   } catch (err) {
     const e = err as AiError;
-    if (e.kind === "auth") {
-      await invoke("ai_clear_key").catch(() => {});
-      keyKnown = false;
-    }
-    keyStatus.textContent = e.message;
+    if (e.kind === "auth") await clearKey(id);
+    keyStatus.textContent = friendly(e);
   }
 });
 
 keyEl.querySelector(".remove")!.addEventListener("click", async () => {
-  await invoke("ai_clear_key").catch(() => {});
-  keyKnown = false;
+  await clearKey(providerSel.value as ProviderId);
+  await showProvider(modelInput.value);
   keyStatus.textContent = "Key removed.";
 });
 
-keyInput.addEventListener("keydown", (e) => {
+keyEl.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     e.preventDefault();
+    e.stopPropagation();
     closeKeySetup();
   }
 });
@@ -235,15 +187,27 @@ keyEl.addEventListener("click", (e) => {
   if (e.target === keyEl) closeKeySetup();
 });
 
-/** Run `fn` now if a key is saved, otherwise after the user adds one. */
+function closeKeySetup() {
+  if (keyEl.hidden) return;
+  keyEl.hidden = true;
+  unregisterOverlay(keyEl);
+  afterKey = null;
+}
+
+/** Run `fn` now if the current provider is set up, otherwise after the user sets one up. */
 async function withKey(fn: () => void) {
-  if (await hasKey()) fn();
-  else openKeySetup(fn);
+  if (await hasKey((await getAiConfig()).provider)) fn();
+  else void openKeySetup(fn);
 }
 
 function friendly(e: unknown): string {
   if (e instanceof AiError) return e.message;
   return `Something went wrong: ${e instanceof Error ? e.message : String(e)}`;
+}
+
+/** Errors that mean "fix the provider settings". */
+function needsSetup(e: unknown) {
+  return e instanceof AiError && (e.kind === "auth" || e.kind === "no_key");
 }
 
 // ---------------------------------------------------------------------------
@@ -481,15 +445,16 @@ async function showCard(action: QuickAction, sel: Selected) {
   try {
     const context = await pageText(sel.n);
     const doc = getDoc();
-    const reply = await callClaude(
+    const reply = await callModel(
       {
-        model: MODEL,
-        max_tokens: 16000,
-        stream: true,
-        output_config: { effort: "low" },
-        fallbacks: "default",
-        system:
-          "You help someone understand a passage in a PDF they are reading. Answer in Markdown, briefly: a short paragraph or a few bullets, with no preamble.",
+        maxTokens: 16000,
+        effort: "low",
+        system: [
+          {
+            type: "text",
+            text: "You help someone understand a passage in a PDF they are reading. Answer in Markdown, briefly: a short paragraph or a few bullets, with no preamble.",
+          },
+        ],
         messages: [
           {
             role: "user",
@@ -501,16 +466,15 @@ async function showCard(action: QuickAction, sel: Selected) {
       },
       c.run,
       { onText: (t) => card === c && render((c.answer = t)) },
-      BETAS.slice(0, 1),
     );
-    if (reply.stopReason === "refusal") throw new AiError("refusal", "Claude declined to answer this.");
+    if (reply.stopReason === "refusal") throw new AiError("refusal", "The AI declined to answer this.");
     c.answer = textOf(reply.content);
     if (card === c) render(c.answer);
   } catch (e) {
     if (card === c && !(e instanceof AiError && e.kind === "cancelled")) {
       body.innerHTML = `<p class="ai-error"></p>`;
       body.firstElementChild!.textContent = friendly(e);
-      if (e instanceof AiError && (e.kind === "auth" || e.kind === "no_key")) openKeySetup(() => void showCard(action, sel));
+      if (needsSetup(e)) void openKeySetup(() => void showCard(action, sel));
     }
   }
 }
@@ -535,7 +499,8 @@ const strict = (properties: Record<string, unknown>) => ({
 });
 const int = (description: string) => ({ type: "integer", description });
 
-const TOOLS = [
+/** The document tools offered to the model; how much read_pages returns depends on the provider. */
+const toolsFor = (b: Budget): Tool[] => [
   {
     name: "search_document",
     description:
@@ -549,7 +514,7 @@ const TOOLS = [
   },
   {
     name: "read_pages",
-    description: `Read the full text of pages first_page to last_page (at most ${READ_PAGES} pages per call). Pages are numbered from 1.`,
+    description: `Read the full text of pages first_page to last_page (at most ${b.readPages} pages per call). Pages are numbered from 1.`,
     input_schema: strict({ first_page: int("First page to read."), last_page: int("Last page to read.") }),
   },
   {
@@ -564,7 +529,7 @@ const TOOLS = [
       "Use it when they ask about what they marked or noted.",
     input_schema: strict({ first_page: int("First page."), last_page: int("Last page.") }),
   },
-].map((t) => ({ ...t, strict: true, eager_input_streaming: true }));
+];
 
 const SYSTEM = `You are the reading assistant inside Minimal PDF, a desktop PDF reader. Answer questions about the document the user has open.
 
@@ -576,20 +541,34 @@ If the document doesn't cover the question, say so plainly. You may then add gen
 
 Keep answers concise: short paragraphs or bullet lists, bold for key terms, no headings unless the answer is long.`;
 
+/** For models without tool calling: the app has already searched, and the best pages come with the question. */
+const SIMPLE_SYSTEM = `You are the reading assistant inside Minimal PDF, a desktop PDF reader. Answer questions about the document the user has open.
+
+With each question you get the pages of the document that best match it, found by a keyword search. Base your answers on those pages. Cite the pages you used after each claim, as [p. 12] or [pp. 12–14]; citations become links in the app, so use exactly that form.
+
+If the pages don't answer the question, say so plainly. You may then add general knowledge, clearly labelled as not from the document.
+
+Keep answers concise: short paragraphs or bullet lists, bold for key terms.`;
+
 type Turn = { el: HTMLElement; steps: HTMLElement; answer: HTMLElement };
 let history: Message[] = [];
 let system: Promise<Block[]> | null = null;
 let running: Run | null = null;
+let noTools = false; // the model can't call tools: use simple RAG (until the provider changes)
 
-/** The system prompt; short documents also get their full text, cached, so most questions need no tools. */
-function systemFor(): Promise<Block[]> {
+/**
+ * The system prompt. Short documents also get their full text (cached on Claude), so most questions
+ * need no tools. Models without tool calling get the simple-RAG prompt.
+ */
+function systemFor(b: Budget): Promise<Block[]> {
   system ??= (async () => {
     const doc = getDoc()!;
-    const blocks: Block[] = [{ type: "text", text: `${SYSTEM}\n\nThe open document is "${doc.name}" (${doc.pageCount} pages).` }];
-    if (doc.pageCount <= INLINE_MAX_PAGES) {
+    const about = `\n\nThe open document is "${doc.name}" (${doc.pageCount} pages).`;
+    const blocks: Block[] = [{ type: "text", text: (noTools ? SIMPLE_SYSTEM : SYSTEM) + about }];
+    if (doc.pageCount <= b.inlinePages) {
       let all = "";
-      for (let n = 1; n <= doc.pageCount && all.length <= INLINE_LIMIT; n++) all += `--- Page ${n} ---\n${await pageText(n)}\n`;
-      if (all.length <= INLINE_LIMIT && all.replace(/--- Page \d+ ---/g, "").trim()) {
+      for (let n = 1; n <= doc.pageCount && all.length <= b.inlineChars; n++) all += `--- Page ${n} ---\n${await pageText(n)}\n`;
+      if (all.length <= b.inlineChars && all.replace(/--- Page \d+ ---/g, "").trim()) {
         blocks.push({
           type: "text",
           text: `The document is short, so its full text is included here. You can answer from it directly and use the tools only if needed.\n\n<document>\n${all}</document>`,
@@ -622,7 +601,7 @@ chatEl.innerHTML = `
     <textarea rows="1" placeholder="Ask about this PDF…" spellcheck="true"></textarea>
     <button type="submit" class="ai-send" title="Send (Enter)">Ask</button>
   </form>
-  <p class="ai-note">Your questions and the pages Claude reads are sent to Anthropic. <span class="ai-keylink" role="button" tabindex="0">API key</span></p>`;
+  <p class="ai-note"><span class="ai-privacy"></span> <span class="ai-keylink" role="button" tabindex="0">Change provider</span></p>`;
 document.body.append(chatEl);
 const logEl = chatEl.querySelector<HTMLElement>(".ai-log")!;
 const askForm = chatEl.querySelector<HTMLFormElement>(".ai-ask")!;
@@ -635,7 +614,10 @@ export function toggleChat() {
   void withKey(openChat);
 }
 
-function openChat() {
+async function openChat() {
+  const p = providerInfo((await getAiConfig()).provider);
+  chatEl.querySelector(".ai-privacy")!.textContent =
+    p.id === "ollama" ? "Answers come from Ollama on this computer; nothing leaves it." : `Your questions and the pages the AI reads are sent to ${p.label}.`;
   if (chatEl.hidden) {
     chatEl.hidden = false;
     registerOverlay(chatEl, closeChat);
@@ -681,38 +663,49 @@ function setRunning(run: Run | null) {
   chatEl.classList.toggle("busy", !!run);
 }
 
-/** Ask a question in the chat. `shown` is what the log displays (defaults to the question). */
-async function ask(question: string, opts: { shown?: string; steps?: number; onDone?: (answer: string) => void } = {}) {
+type AskOptions = {
+  shown?: string; // what the log displays (defaults to the question)
+  steps?: number; // tool rounds allowed
+  pages?: [number, number]; // pages the question is about (summaries), for simple RAG
+  onDone?: (answer: string) => void;
+};
+
+/** Ask a question in the chat: the agent loop, or simple RAG for models without tool calling. */
+async function ask(question: string, opts: AskOptions = {}) {
   if (running || !getDoc()) return;
   const doc = getDoc();
   const turn = addTurn(opts.shown ?? question);
   const run: Run = { cancelled: false };
   setRunning(run);
   const mark = history.length;
-  history.push({ role: "user", content: `${question}\n\n(I'm on page ${getCurrentPage()}.)` });
+  const userText = `${question}\n\n(I'm on page ${getCurrentPage()}.)`;
+  history.push({ role: "user", content: userText });
   const render = renderer(turn.answer);
   turn.answer.innerHTML = `<p class="ai-wait">Thinking…</p>`;
   let update: HTMLLIElement | null = null;
   try {
-    const sys = await systemFor();
+    const b = await budget();
+    const sys = await systemFor(b);
+    if (noTools) {
+      // Simple RAG: search first, then send the best pages with the question (only for this request,
+      // so the conversation doesn't grow by whole pages every turn).
+      const context = await retrieve(question, turn, b, opts.pages);
+      const messages: Message[] = [...history.slice(0, mark), { role: "user", content: `${userText}\n\n${context}` }];
+      const reply = await callModel({ system: sys, messages, maxTokens: 64000, effort: "medium" }, run, { onText: (t) => render(t) });
+      if (getDoc() !== doc) return;
+      if (reply.stopReason === "refusal") throw new AiError("refusal", "The AI declined to answer this.");
+      const answer = textOf(reply.content);
+      history.push({ role: "assistant", content: answer || "(no answer)" });
+      render(answer || "_No answer._");
+      opts.onDone?.(answer);
+      return;
+    }
     for (let step = 0; ; step++) {
       if (step >= (opts.steps ?? MAX_STEPS)) throw new AiError("api", "Stopped after too many steps. Try a narrower question.");
       update = null;
-      const reply = await callClaude(
-        {
-          model: MODEL,
-          max_tokens: 64000,
-          stream: true,
-          system: sys,
-          tools: TOOLS,
-          messages: history,
-          thinking: { type: "adaptive", display: "updates" },
-          output_config: { effort: "medium" },
-          fallbacks: "default",
-          cache_control: { type: "ephemeral" },
-        },
-        run,
-        {
+      let reply;
+      try {
+        reply = await callModel({ system: sys, messages: history, tools: toolsFor(b), maxTokens: 64000, effort: "medium" }, run, {
           onText: (t) => render(t),
           // Progress notes between tool calls show as steps.
           onUpdate: (t) => {
@@ -720,12 +713,22 @@ async function ask(question: string, opts: { shown?: string; steps?: number; onD
             update.textContent = t.trim();
             update.classList.add("note");
           },
-        },
-      );
+        });
+      } catch (e) {
+        if (step > 0 || !toolsUnsupported(e)) throw e;
+        // This model can't call tools: switch to simple RAG and ask again.
+        noTools = true;
+        announceNoTools = true;
+        system = null;
+        history.length = mark;
+        turn.el.remove();
+        setRunning(null);
+        return ask(question, opts);
+      }
       if (getDoc() !== doc) return;
-      const content = echoable(reply.content);
+      const content = reply.content;
       history.push({ role: "assistant", content });
-      if (reply.stopReason === "refusal") throw new AiError("refusal", "Claude declined to answer this.");
+      if (reply.stopReason === "refusal") throw new AiError("refusal", "The AI declined to answer this.");
       const uses = content.filter((b) => b.type === "tool_use");
       if (reply.stopReason === "max_tokens" && uses.length) throw new AiError("api", "The answer was cut off. Try a narrower question.");
       if (reply.stopReason !== "tool_use" || !uses.length) {
@@ -739,7 +742,7 @@ async function ask(question: string, opts: { shown?: string; steps?: number; onD
       if (said) addStep(turn, said).classList.add("note");
       render("");
       turn.answer.innerHTML = `<p class="ai-wait">Reading…</p>`;
-      const results = await Promise.all(uses.map((u) => runTool(u, turn)));
+      const results = await Promise.all(uses.map((u) => runTool(u, turn, b)));
       if (run.cancelled) throw new AiError("cancelled", "Stopped.");
       history.push({ role: "user", content: results });
     }
@@ -748,10 +751,47 @@ async function ask(question: string, opts: { shown?: string; steps?: number; onD
     if (getDoc() !== doc) return;
     turn.answer.innerHTML = `<p class="ai-error"></p>`;
     turn.answer.firstElementChild!.textContent = friendly(e);
-    if (e instanceof AiError && (e.kind === "auth" || e.kind === "no_key")) openKeySetup();
+    if (needsSetup(e)) void openKeySetup();
   } finally {
     if (running === run) setRunning(null);
   }
+}
+
+let announceNoTools = false;
+
+/** A request with tools was refused because the model can't call them. */
+function toolsUnsupported(e: unknown) {
+  return e instanceof AiError && e.kind === "api" && /error (400|404|422)\b/.test(e.message) && /tool|function/i.test(e.message);
+}
+
+/**
+ * Simple RAG: the keyword search picks the best pages (or the given range), and their text is
+ * returned for the prompt, within the provider's budget.
+ */
+async function retrieve(question: string, turn: Turn, b: Budget, range?: [number, number]): Promise<string> {
+  if (announceNoTools) {
+    addStep(turn, "This model can't use tools, so the app searches the PDF and sends it the best pages.").classList.add("note");
+    announceNoTools = false;
+  }
+  let pages: number[];
+  if (range) {
+    pages = [];
+    for (let n = range[0]; n <= range[1]; n++) pages.push(n);
+  } else {
+    addStep(turn, `Searching “${question.length > 60 ? question.slice(0, 60) + "…" : question}”`);
+    pages = (await searchText(question, SIMPLE_RAG_PAGES)).map((h) => h.page);
+    if (!pages.length) pages = [getCurrentPage()];
+  }
+  let out = "";
+  const read: number[] = [];
+  for (const n of pages) {
+    const chunk = `--- Page ${n} ---\n${(await pageText(n)) || "(no text on this page)"}\n`;
+    if (out && out.length + chunk.length > b.readChars) break;
+    out += chunk;
+    read.push(n);
+  }
+  addStep(turn, `Reading ${read.map((n) => `p. ${n}`).join(", ")}`);
+  return `<pages>\n${out}</pages>`;
 }
 
 function pagesArg(input: Record<string, unknown>): [number, number] | string {
@@ -764,7 +804,7 @@ function pagesArg(input: Record<string, unknown>): [number, number] | string {
   return [from, to];
 }
 
-async function runTool(use: Block, turn: Turn): Promise<Block> {
+async function runTool(use: Block, turn: Turn, b: Budget): Promise<Block> {
   const result = (content: string, isError = false): Block => ({
     type: "tool_result",
     tool_use_id: use.id as string,
@@ -789,18 +829,18 @@ async function runTool(use: Block, turn: Turn): Promise<Block> {
         const r = pagesArg(input);
         if (typeof r === "string") return result(r, true);
         const [from] = r;
-        const to = Math.min(r[1], from + READ_PAGES - 1);
+        const to = Math.min(r[1], from + b.readPages - 1);
         addStep(turn, `Reading ${range(from, to)}`);
         let out = "";
         for (let n = from; n <= to; n++) {
           const chunk = `--- Page ${n} ---\n${(await pageText(n)) || "(no text on this page; it may be a scanned image)"}\n`;
-          if (out && out.length + chunk.length > READ_LIMIT) {
+          if (out && out.length + chunk.length > b.readChars) {
             out += `--- Stopped before page ${n} (read limit); read it in another call ---\n`;
             break;
           }
           out += chunk;
         }
-        if (to < r[1]) out += `--- Only ${READ_PAGES} pages per call; read pages ${to + 1}–${r[1]} in another call ---\n`;
+        if (to < r[1]) out += `--- Only ${b.readPages} pages per call; read pages ${to + 1}–${r[1]} in another call ---\n`;
         return result(out);
       }
       case "get_outline": {
@@ -890,6 +930,7 @@ async function summarise(kind: SummaryKind) {
   }
   await ask(question, {
     shown,
+    pages: [from, to],
     steps: kind === "doc" ? 24 : MAX_STEPS,
     onDone: (answer) => {
       if (!answer) return;
@@ -905,7 +946,7 @@ function followUp(c: Card) {
   const turn = addTurn(`${label}: “${c.sel.text.length > 120 ? c.sel.text.slice(0, 120) + "…" : c.sel.text}”`);
   turn.answer.innerHTML = markdown(c.answer);
   history.push({ role: "user", content: question }, { role: "assistant", content: c.answer });
-  openChat();
+  void openChat();
 }
 
 askForm.addEventListener("submit", (e) => {
@@ -945,13 +986,18 @@ keyLink.addEventListener("keydown", (e) => {
   if (e.key === "Enter") openKeySetup();
 });
 
-// A new document starts a new conversation.
-events.addEventListener("close", () => {
-  closeCard();
-  closeChat();
+/** Start the conversation over (a new document, or a different provider or model). */
+function resetChat() {
   if (running) cancel(running);
   setRunning(null);
   history = [];
   system = null;
+  noTools = false;
   logEl.replaceChildren();
+}
+
+events.addEventListener("close", () => {
+  closeCard();
+  closeChat();
+  resetChat();
 });

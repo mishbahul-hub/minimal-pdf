@@ -56,8 +56,8 @@ export const KEYMAP: Binding[] = [
   { keys: ["/", "Ctrl+f"], label: "/", help: "Search (Enter / Shift+Enter: next / previous match)", action: openSearch },
   { keys: ["t"], label: "t", help: "Table of contents", action: toggleOutline },
   { keys: ["a"], label: "a / right-click", help: "Annotation tools and AI (select text first to explain or translate it)", action: () => openRadial() },
-  { keys: ["c"], label: "c", help: "Ask Claude about this PDF (chat, summaries)", action: toggleChat },
-  { keys: ["Ctrl+,"], label: "Ctrl+,", help: "Claude API key", action: () => openKeySetup() },
+  { keys: ["c"], label: "c", help: "Ask AI about this PDF (chat, summaries)", action: toggleChat },
+  { keys: ["Ctrl+,"], label: "Ctrl+,", help: "AI provider and API key", action: () => openKeySetup() },
   { keys: ["Ctrl+z"], label: "Ctrl+Z", help: "Undo annotation", action: undo, repeat: true },
   { keys: ["Ctrl+y", "Ctrl+Shift+z"], label: "Ctrl+Y", help: "Redo annotation", action: redo, repeat: true },
   {
