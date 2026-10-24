@@ -98,12 +98,17 @@ function validUi(u: unknown): UiStyle | null {
   return { style: v.style, transparency: Math.min(100, Math.max(0, Math.round(v.transparency))) };
 }
 
-/** Apply a pop-up style now (also used live while the slider moves). */
-export function applyUiStyle(u: UiStyle) {
+/** Show a pop-up style without remembering it (live, while the slider moves). */
+export function previewUiStyle(u: UiStyle) {
   uiStyle = u;
   const root = document.documentElement;
   root.dataset.ui = u.style;
   root.style.setProperty("--glass-t", String(u.transparency / 100));
+}
+
+/** Apply a pop-up style and remember it on this computer. */
+export function applyUiStyle(u: UiStyle) {
+  previewUiStyle(u);
   try {
     localStorage.setItem(UI_CACHE_KEY, JSON.stringify(u));
   } catch {

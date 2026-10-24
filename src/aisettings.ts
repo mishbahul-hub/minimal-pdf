@@ -4,7 +4,7 @@
 // Keys go to Rust (Windows Credential Manager); everything else is kept in settings.json.
 import { getVersion } from "@tauri-apps/api/app";
 import { showIndicator } from "./viewer";
-import { applyUiStyle, getSetting, getTheme, getUiStyle, setSetting, setTheme, setUiStyle, THEMES, type Theme, type UiStyle } from "./settings";
+import { getSetting, getTheme, getUiStyle, previewUiStyle, setSetting, setTheme, setUiStyle, THEMES, type Theme, type UiStyle } from "./settings";
 import { registerOverlay, unregisterOverlay } from "./overlays";
 import {
   aiEvents,
@@ -55,7 +55,7 @@ el.innerHTML = `
         <button type="button" data-ui-pick="glass">Liquid glass</button>
       </div>
       <label class="glass-row">Transparency <span class="glass-value"></span>
-        <input name="glass" type="range" min="0" max="100" step="5" />
+        <input name="glass" type="range" min="0" max="100" step="1" />
       </label>
       <p class="hint">For every pop-up: this window, the right-click menu, the chat, the answer cards, search and help.</p>
       <label>Translate and summarize into
@@ -231,7 +231,13 @@ function markUiStyle() {
   for (const b of uiButtons) b.setAttribute("aria-pressed", String(b.dataset.uiPick === u.style));
   glassRow.hidden = u.style !== "glass";
   glassSlider.value = String(u.transparency);
-  glassValue.textContent = `${u.transparency}%`;
+  showSlider(u.transparency);
+}
+
+/** The number and the filled part of the track follow the thumb. */
+function showSlider(value: number) {
+  glassValue.textContent = `${value}%`;
+  glassSlider.style.setProperty("--fill", `${value}%`);
 }
 
 for (const b of uiButtons) {
@@ -241,10 +247,15 @@ for (const b of uiButtons) {
   });
 }
 
-// Live while dragging; saved when let go.
+// Live while dragging, at most once a frame (blurring what's behind every pop-up is the costly part);
+// saved only when let go.
+let sliderFrame = 0;
 glassSlider.addEventListener("input", () => {
-  applyUiStyle({ ...getUiStyle(), transparency: Number(glassSlider.value) });
-  glassValue.textContent = `${glassSlider.value}%`;
+  showSlider(Number(glassSlider.value));
+  sliderFrame ||= requestAnimationFrame(() => {
+    sliderFrame = 0;
+    previewUiStyle({ ...getUiStyle(), transparency: Number(glassSlider.value) });
+  });
 });
 glassSlider.addEventListener("change", () => void setUiStyle({ ...getUiStyle(), transparency: Number(glassSlider.value) }));
 

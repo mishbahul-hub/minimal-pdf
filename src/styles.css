@@ -211,6 +211,10 @@ body {
 }
 
 :root[data-ui="glass"] .panel {
+  /* Ease between transparency values instead of jumping. */
+  transition:
+    background-color 0.12s ease-out,
+    backdrop-filter 0.12s ease-out;
   background: color-mix(in srgb, var(--panel-bg) calc((1 - var(--glass-t) * 0.75) * 100%), transparent);
   border-color: color-mix(in srgb, white 35%, var(--panel-border));
   backdrop-filter: blur(calc(6px + var(--glass-t) * 16px)) saturate(170%);
@@ -1503,11 +1507,46 @@ svg.ink text {
   font-variant-numeric: tabular-nums;
 }
 
+/* Transparency slider: a thin track that fills up to the thumb (--fill, set while dragging) */
 #ai-key input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 22px;
+  margin-top: 6px;
   padding: 0;
   border: 0;
   background: none;
-  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+#ai-key input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(to right, var(--accent) var(--fill, 50%), color-mix(in srgb, var(--muted), transparent 70%) var(--fill, 50%));
+}
+
+#ai-key input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  margin-top: -6px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1px solid color-mix(in srgb, var(--accent), black 10%);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  transition: transform 0.1s;
+}
+
+#ai-key input[type="range"]:active::-webkit-slider-thumb {
+  transform: scale(1.15);
+}
+
+#ai-key input[type="range"]:focus-visible {
+  outline: none;
+}
+
+#ai-key input[type="range"]:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent), transparent 60%);
 }
 
 #ai-key .about {
