@@ -87,8 +87,9 @@ provider to use. Change it any time with `Ctrl+,`.
 **Settings** opens with `Ctrl+,`, the ⚙ gear at the bottom of the right-click menu, the ⚙ in the
 chat panel, or the **Settings** button on the start screen. It has four tabs:
 
-- **General:** theme (light, dark, sepia), the language Translate and Summarize use, and the app
-  version.
+- **General:** theme (light, dark, sepia), the **pop-up style** (**Normal**, or **Liquid glass**
+  with a transparency slider) for every pop-up (settings, the right-click menu, chat, answer cards,
+  search, contents, help), the language Translate and Summarize use, and the app version.
 - **Chat AI:** pick the provider, paste the key, and press **Load models** to choose from the
   models that provider offers right now (model names change often; the app suggests a default).
   **Save and test** sends a one-word test request before saving.

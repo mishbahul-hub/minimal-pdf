@@ -85,6 +85,58 @@ export async function cycleTheme() {
 }
 
 // ---------------------------------------------------------------------------
+// Pop-up style: "normal" (solid) or "glass" (liquid glass) with a transparency of 0–100 %
+
+export type UiStyle = { style: "normal" | "glass"; transparency: number };
+const UI_DEFAULT: UiStyle = { style: "glass", transparency: 80 };
+const UI_CACHE_KEY = "uiStyle"; // localStorage mirror, so pop-ups look right before the store loads
+let uiStyle: UiStyle = UI_DEFAULT;
+
+function validUi(u: unknown): UiStyle | null {
+  const v = u as Partial<UiStyle> | null;
+  if (!v || (v.style !== "normal" && v.style !== "glass") || typeof v.transparency !== "number") return null;
+  return { style: v.style, transparency: Math.min(100, Math.max(0, Math.round(v.transparency))) };
+}
+
+/** Apply a pop-up style now (also used live while the slider moves). */
+export function applyUiStyle(u: UiStyle) {
+  uiStyle = u;
+  const root = document.documentElement;
+  root.dataset.ui = u.style;
+  root.style.setProperty("--glass-t", String(u.transparency / 100));
+  try {
+    localStorage.setItem(UI_CACHE_KEY, JSON.stringify(u));
+  } catch {
+    // Storage unavailable: the store still remembers it.
+  }
+}
+
+export function getUiStyle(): UiStyle {
+  return uiStyle;
+}
+
+export async function setUiStyle(u: UiStyle) {
+  applyUiStyle(u);
+  await (await storeReady).set("uiStyle", u);
+}
+
+async function initUiStyle() {
+  const saved = validUi(await (await storeReady).get("uiStyle"));
+  if (saved) applyUiStyle(saved);
+}
+
+// Before anything shows: the last style used on this computer, or the default.
+applyUiStyle(
+  (() => {
+    try {
+      return validUi(JSON.parse(localStorage.getItem(UI_CACHE_KEY) ?? "null")) ?? UI_DEFAULT;
+    } catch {
+      return UI_DEFAULT;
+    }
+  })(),
+);
+
+// ---------------------------------------------------------------------------
 // Positions
 
 async function savedPosition(doc: DocInfo): Promise<SavedPosition | null> {
@@ -203,6 +255,7 @@ function startExtras(): Node {
 
 export async function initSettings() {
   await initTheme();
+  await initUiStyle();
   await loadRecents();
   setStartExtras(startExtras);
 

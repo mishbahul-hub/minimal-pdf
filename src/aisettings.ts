@@ -4,7 +4,7 @@
 // Keys go to Rust (Windows Credential Manager); everything else is kept in settings.json.
 import { getVersion } from "@tauri-apps/api/app";
 import { showIndicator } from "./viewer";
-import { getSetting, getTheme, setSetting, setTheme, THEMES, type Theme } from "./settings";
+import { applyUiStyle, getSetting, getTheme, getUiStyle, setSetting, setTheme, setUiStyle, THEMES, type Theme, type UiStyle } from "./settings";
 import { registerOverlay, unregisterOverlay } from "./overlays";
 import {
   aiEvents,
@@ -49,6 +49,15 @@ el.innerHTML = `
         <button type="button" data-theme-pick="sepia">Sepia</button>
       </div>
       <p class="hint">Also with the d key.</p>
+      <label>Pop-up style</label>
+      <div class="segmented ui-styles" role="group" aria-label="Pop-up style">
+        <button type="button" data-ui-pick="normal">Normal</button>
+        <button type="button" data-ui-pick="glass">Liquid glass</button>
+      </div>
+      <label class="glass-row">Transparency <span class="glass-value"></span>
+        <input name="glass" type="range" min="0" max="100" step="5" />
+      </label>
+      <p class="hint">For every pop-up: this window, the right-click menu, the chat, the answer cards, search and help.</p>
       <label>Translate and summarize into
         <select name="hflang"></select>
       </label>
@@ -192,6 +201,7 @@ for (const l of LANGS) langSelect.append(new Option(`${l.name} · ${l.native}`, 
 
 async function showGeneral() {
   markTheme();
+  markUiStyle();
   const lang = await getSetting<string>("hfLanguage");
   langSelect.value = lang && [...langSelect.options].some((o) => o.value === lang) ? lang : "hi";
   general.querySelector(".about")!.textContent = `Minimal PDF ${await getVersion().catch(() => "")}`;
@@ -210,6 +220,33 @@ for (const b of themeButtons) {
     markTheme();
   });
 }
+
+const uiButtons = [...general.querySelectorAll<HTMLButtonElement>("[data-ui-pick]")];
+const glassRow = general.querySelector<HTMLElement>(".glass-row")!;
+const glassSlider = general.querySelector<HTMLInputElement>('[name="glass"]')!;
+const glassValue = general.querySelector<HTMLElement>(".glass-value")!;
+
+function markUiStyle() {
+  const u = getUiStyle();
+  for (const b of uiButtons) b.setAttribute("aria-pressed", String(b.dataset.uiPick === u.style));
+  glassRow.hidden = u.style !== "glass";
+  glassSlider.value = String(u.transparency);
+  glassValue.textContent = `${u.transparency}%`;
+}
+
+for (const b of uiButtons) {
+  b.addEventListener("click", async () => {
+    await setUiStyle({ ...getUiStyle(), style: b.dataset.uiPick as UiStyle["style"] });
+    markUiStyle();
+  });
+}
+
+// Live while dragging; saved when let go.
+glassSlider.addEventListener("input", () => {
+  applyUiStyle({ ...getUiStyle(), transparency: Number(glassSlider.value) });
+  glassValue.textContent = `${glassSlider.value}%`;
+});
+glassSlider.addEventListener("change", () => void setUiStyle({ ...getUiStyle(), transparency: Number(glassSlider.value) }));
 
 langSelect.addEventListener("change", () => {
   void setSetting("hfLanguage", langSelect.value);
