@@ -61,9 +61,10 @@ The AI features are optional. They work with **free API keys** from several prov
 model running on your own computer, or with Claude. The first time you use one, the app asks which
 provider to use. Change it any time with `Ctrl+,`.
 
-- **Selected text:** select some text, right-click it, and pick **Explain**, **Simplify**, **Define**
-  or **Translate** from the ring. The answer appears in a small card next to the text; you can copy
-  it, **save it as a comment** on the page, or **ask a follow-up** in the chat.
+- **Selected text:** select some text, right-click it, and pick **Explain**, **Simplify** or
+  **Define** (answered by your chat AI), or **Translate** or **Summarize** (Hugging Face models, see
+  below) from the ring. The answer appears in a small card next to the text; you can copy it,
+  **save it as a comment** on the page, or **ask a follow-up** in the chat.
 - **Chat with the PDF** (`c`, or the ✦ button in the ring): ask anything about the document. The
   AI searches and reads the PDF itself (you see each step, like "Searching 'dropout'" or
   "Reading pp. 40–42") and answers with page citations such as **p. 42** that jump to the page
@@ -83,12 +84,16 @@ provider to use. Change it any time with `Ctrl+,`.
 | **Anthropic Claude** | paid | [console.anthropic.com](https://console.anthropic.com/settings/keys) |
 | **Other** | any service with an OpenAI-compatible API | enter its address (base URL) and key |
 
-In the `Ctrl+,` dialog, pick the provider, paste the key, and press **Load models** to choose
-from the models that provider offers right now (model names change often; the app suggests a
-default). **Save and test** sends a one-word test request before saving.
+`Ctrl+,` opens **AI settings**, with three tabs:
 
-Keys are kept in **Windows Credential Manager**, never in the app's files. The provider, model and
-address go in `settings.json`.
+- **Chat AI:** pick the provider, paste the key, and press **Load models** to choose from the
+  models that provider offers right now (model names change often; the app suggests a default).
+  **Save and test** sends a one-word test request before saving.
+- **Translate & summarize:** your Hugging Face token and the model for each task (see below).
+- **API keys:** every key saved on this computer, what it's used for, and a **Remove** button.
+
+Keys are kept in **Windows Credential Manager**, never in the app's files. The provider, model,
+address and model choices go in `settings.json`.
 
 Free tiers limit how much text you can send per minute, so with Groq, Hugging Face, OpenRouter and
 Ollama the app sends fewer pages per request. If you see "too many requests", wait a minute.
@@ -96,6 +101,38 @@ Ollama the app sends fewer pages per request. If you see "too many requests", wa
 **Privacy:** nothing is sent until you ask. Your question, the selected text and the pages the AI
 reads go to the provider you chose; with Ollama nothing leaves your computer. The PDF file itself
 is never uploaded.
+
+### Translation and summaries (Hugging Face)
+
+**Translate** turns selected English text into **Hindi, Marathi, Assamese, Bengali or Arabic**.
+**Summarize** is a two-step pipeline: it summarizes the English text, then translates the summary
+into the language you pick (or leaves it in English). Pick the language in the card; the app
+remembers it. Arabic is shown right-to-left.
+
+```mermaid
+flowchart LR
+    S["Selected English text"] --> B["Summarization model<br/>facebook/bart-large-cnn"]
+    B --> E["English summary"]
+    E --> T["Translation model<br/>google/madlad400-3b-mt"]
+    T --> O["Summary in Hindi, Marathi,<br/>Assamese, Bengali or Arabic"]
+```
+
+These run on Hugging Face's servers with **your Hugging Face token** (free monthly credits):
+create one at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) (a
+*fine-grained* token with **Make calls to Inference Providers** ticked) and paste it in
+`Ctrl+,` → **Translate & summarize**. It's the same token the Hugging Face chat provider uses.
+
+| Task | Default model | Why |
+|---|---|---|
+| Translation (all five languages) | [google/madlad400-3b-mt](https://huggingface.co/google/madlad400-3b-mt) | translates into 400+ languages, including all five; Apache-2.0 |
+| Hindi (alternative) | [Helsinki-NLP/opus-mt-en-hi](https://huggingface.co/Helsinki-NLP/opus-mt-en-hi) | small and fast, English → Hindi only |
+| Arabic (alternative) | [Helsinki-NLP/opus-mt-tc-big-en-ar](https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-en-ar) | English → Arabic only |
+| English summaries | [facebook/bart-large-cnn](https://huggingface.co/facebook/bart-large-cnn) | Hugging Face's recommended summarizer |
+
+You can pick a different model for each language, and for summaries. **Show all served models**
+lists the models Hugging Face is running right now. Long text is split at sentence ends:
+translation goes a few sentences at a time, and summaries are built part by part. If a model is
+asleep, the first request can take a little longer while Hugging Face loads it.
 
 ## How the RAG pipeline works
 
@@ -189,7 +226,7 @@ key handling and streaming in [src-tauri/src/ai.rs](src-tauri/src/ai.rs).
 | `t` | Table of contents |
 | `a` or right-click | Annotation tools (and AI actions on selected text) |
 | `c` | Ask AI about this PDF: chat and summaries |
-| `Ctrl+,` | AI provider and API key |
+| `Ctrl+,` | AI settings: chat provider, translation and summary models, API keys |
 | `Ctrl+Z` / `Ctrl+Y` | Undo / redo annotations |
 | `1`–`9` | Open a recent file (start screen) |
 | `?` | Show all shortcuts |
@@ -261,6 +298,8 @@ src/
   update.ts      update check and install prompt
   ai.ts          AI features: selection actions, chat (agentic RAG over the PDF), summaries, provider dialog
   llm.ts         AI providers: Anthropic and OpenAI-compatible adapters, streaming
+  hf.ts          Hugging Face translation and summarization (summarize, then translate)
+  aisettings.ts  AI settings dialog (Ctrl+,): chat provider, Hugging Face models, saved keys
   styles.css     all styles and themes
 src-tauri/
   src/lib.rs     window sizing, launch file, single instance, recent-file access

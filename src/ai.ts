@@ -9,29 +9,14 @@ import { pageText, searchText, textBoxes } from "./search";
 import { getOutlineItems, sectionAt } from "./outline";
 import { addComment, annotationList, getDocData, setDocData } from "./annotate";
 import { getSetting, setSetting } from "./settings";
-import {
-  AiError,
-  callModel,
-  cancel,
-  clearKey,
-  getAiConfig,
-  hasKey,
-  listModels,
-  providerInfo,
-  PROVIDERS,
-  saveKey,
-  setAiConfig,
-  textOf,
-  type Block,
-  type Message,
-  type ProviderId,
-  type Run,
-  type Tool,
-} from "./llm";
+import { AiError, aiEvents, callModel, cancel, friendly, getAiConfig, providerInfo, textOf, type Block, type Message, type Run, type Tool } from "./llm";
+import { openKeySetup, withHfToken, withKey } from "./aisettings";
+import { LANGS, langInfo, MIN_SUMMARY_CHARS, summarize, translate, type LangId } from "./hf";
+
+export { openKeySetup };
 
 const MAX_STEPS = 12; // tool rounds per question (summaries get more)
 const SIMPLE_RAG_PAGES = 4; // pages sent to models without tool calling
-const LANGUAGES = ["English", "Bengali", "Hindi", "Urdu", "Arabic", "Spanish", "French", "German", "Chinese", "Japanese"];
 
 /** How much text one request may carry. Free tiers have small per-minute token limits. */
 type Budget = { readPages: number; readChars: number; inlineChars: number; inlinePages: number };
@@ -40,169 +25,6 @@ const SMALL: Budget = { readPages: 3, readChars: 12_000, inlineChars: 12_000, in
 
 async function budget(): Promise<Budget> {
   return providerInfo((await getAiConfig()).provider).small ? SMALL : LARGE;
-}
-
-// ---------------------------------------------------------------------------
-// AI provider and key (Ctrl+,)
-
-const keyEl = document.createElement("div");
-keyEl.id = "ai-key";
-keyEl.hidden = true;
-keyEl.innerHTML = `
-  <form class="panel">
-    <h2>AI provider</h2>
-    <p>Use a free key from Google AI Studio, Groq, Hugging Face or OpenRouter, a model running on this
-    computer with Ollama, or Claude. Keys are kept in Windows Credential Manager, not in the app's files.</p>
-    <label>Provider <select name="provider"></select></label>
-    <p class="hint"></p>
-    <label class="url-row">Address <input name="url" type="text" autocomplete="off" spellcheck="false" /></label>
-    <label>Model
-      <span class="model-row">
-        <input name="model" type="text" list="ai-models" autocomplete="off" spellcheck="false" />
-        <button type="button" class="load">Load models</button>
-      </span>
-    </label>
-    <datalist id="ai-models"></datalist>
-    <label class="key-row">API key <input name="key" type="password" autocomplete="off" spellcheck="false" /></label>
-    <div class="row">
-      <button type="submit" class="primary">Save and test</button>
-      <button type="button" class="remove">Remove key</button>
-      <span class="status" aria-live="polite"></span>
-    </div>
-  </form>`;
-document.body.append(keyEl);
-const keyForm = keyEl.querySelector("form")!;
-const providerSel = keyEl.querySelector<HTMLSelectElement>('[name="provider"]')!;
-const urlInput = keyEl.querySelector<HTMLInputElement>('[name="url"]')!;
-const modelInput = keyEl.querySelector<HTMLInputElement>('[name="model"]')!;
-const keyInput = keyEl.querySelector<HTMLInputElement>('[name="key"]')!;
-const modelList = keyEl.querySelector<HTMLDataListElement>("#ai-models")!;
-const keyHint = keyEl.querySelector<HTMLElement>(".hint")!;
-const keyStatus = keyEl.querySelector<HTMLElement>(".status")!;
-for (const p of PROVIDERS) providerSel.append(new Option(p.label, p.id));
-let afterKey: (() => void) | null = null;
-
-/** Show the provider settings (Ctrl+,). `then` runs once a working provider is saved. */
-export async function openKeySetup(then?: () => void) {
-  afterKey = then ?? null;
-  const c = await getAiConfig();
-  providerSel.value = c.provider;
-  await showProvider(c.model);
-  if (keyEl.hidden) {
-    keyEl.hidden = false;
-    registerOverlay(keyEl, closeKeySetup);
-  }
-  (keyInput.closest("label")!.hidden ? modelInput : keyInput).focus();
-}
-
-/** Fill the form for the selected provider. */
-async function showProvider(model?: string) {
-  const p = providerInfo(providerSel.value as ProviderId);
-  const saved = await hasKey(p.id);
-  keyHint.textContent = p.keyHint;
-  urlInput.closest("label")!.hidden = !p.editableUrl;
-  urlInput.value = "";
-  urlInput.placeholder = p.baseUrl ?? "https://api.example.com/v1";
-  modelInput.value = model ?? p.defaultModel;
-  modelInput.placeholder = p.defaultModel || "model name";
-  modelList.replaceChildren();
-  keyInput.value = "";
-  keyInput.placeholder = saved ? "Saved. Paste a new key to replace it." : p.keyOptional ? "Optional" : "Paste your API key";
-  keyStatus.textContent = "";
-}
-
-providerSel.addEventListener("change", async () => {
-  const c = await getAiConfig();
-  await showProvider(c.provider === providerSel.value ? c.model : undefined);
-});
-
-/** Save what was typed for this provider: the key, and the address for Ollama / custom endpoints. */
-async function saveTyped(id: ProviderId) {
-  const p = providerInfo(id);
-  const key = keyInput.value.trim();
-  const url = urlInput.value.trim();
-  if (key || url || (p.keyOptional && !(await hasKey(id)))) await saveKey(id, key, url || p.baseUrl);
-  else if (!(await hasKey(id))) throw new AiError("no_key", "Paste your API key first.");
-  keyInput.value = "";
-}
-
-keyEl.querySelector(".load")!.addEventListener("click", async () => {
-  const id = providerSel.value as ProviderId;
-  keyStatus.textContent = "Loading models…";
-  try {
-    await saveTyped(id);
-    const models = await listModels(id);
-    modelList.replaceChildren(...models.map((m) => new Option(m, m)));
-    keyStatus.textContent = models.length ? `${models.length} models: pick one in the Model box.` : "The provider listed no models.";
-    modelInput.focus();
-  } catch (e) {
-    keyStatus.textContent = friendly(e);
-  }
-});
-
-keyForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const id = providerSel.value as ProviderId;
-  const p = providerInfo(id);
-  const model = modelInput.value.trim() || p.defaultModel;
-  if (!model) {
-    keyStatus.textContent = "Enter a model name (or use Load models).";
-    return;
-  }
-  keyStatus.textContent = "Checking…";
-  try {
-    await saveTyped(id);
-    // A tiny request proves the key and model work before the user relies on them.
-    const cfg = { provider: id, model };
-    await callModel({ system: [], messages: [{ role: "user", content: "Reply with OK." }], maxTokens: 256, effort: "low" }, { cancelled: false }, {}, cfg);
-    const changed = (await getAiConfig()).provider !== id || (await getAiConfig()).model !== model;
-    await setAiConfig(cfg);
-    if (changed) resetChat();
-    const then = afterKey;
-    closeKeySetup();
-    showIndicator(`${p.label} connected`);
-    then?.();
-  } catch (err) {
-    const e = err as AiError;
-    if (e.kind === "auth") await clearKey(id);
-    keyStatus.textContent = friendly(e);
-  }
-});
-
-keyEl.querySelector(".remove")!.addEventListener("click", async () => {
-  await clearKey(providerSel.value as ProviderId);
-  await showProvider(modelInput.value);
-  keyStatus.textContent = "Key removed.";
-});
-
-keyEl.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") {
-    e.preventDefault();
-    e.stopPropagation();
-    closeKeySetup();
-  }
-});
-
-keyEl.addEventListener("click", (e) => {
-  if (e.target === keyEl) closeKeySetup();
-});
-
-function closeKeySetup() {
-  if (keyEl.hidden) return;
-  keyEl.hidden = true;
-  unregisterOverlay(keyEl);
-  afterKey = null;
-}
-
-/** Run `fn` now if the current provider is set up, otherwise after the user sets one up. */
-async function withKey(fn: () => void) {
-  if (await hasKey((await getAiConfig()).provider)) fn();
-  else void openKeySetup(fn);
-}
-
-function friendly(e: unknown): string {
-  if (e instanceof AiError) return e.message;
-  return `Something went wrong: ${e instanceof Error ? e.message : String(e)}`;
 }
 
 /** Errors that mean "fix the provider settings". */
@@ -335,16 +157,25 @@ document.addEventListener("click", (e) => {
 });
 
 // ---------------------------------------------------------------------------
-// Ask about selected text (right-click a selection → Explain / Simplify / Define / Translate)
+// Ask about selected text (right-click a selection → Explain / Simplify / Define with the chat AI;
+// Translate / Summarize with Hugging Face models, hf.ts)
 
 export type Selected = { text: string; n: number; x: number; y: number; bottom: number };
-export type QuickAction = "explain" | "simplify" | "define" | "translate";
+export type QuickAction = "explain" | "simplify" | "define" | "translate" | "summarize";
 export const QUICK_ACTIONS: { id: QuickAction; label: string }[] = [
   { id: "explain", label: "Explain" },
   { id: "simplify", label: "Simplify" },
   { id: "define", label: "Define" },
   { id: "translate", label: "Translate" },
+  { id: "summarize", label: "Summarize" },
 ];
+const HF_ACTIONS: QuickAction[] = ["translate", "summarize"];
+
+/** The language Translate / Summarize use ("en" = summary in English only). */
+async function hfLanguage(): Promise<LangId | "en"> {
+  const saved = await getSetting<string>("hfLanguage");
+  return saved === "en" || LANGS.some((l) => l.id === saved) ? (saved as LangId | "en") : "hi";
+}
 
 /** The text selected on a page, with its position in page units. Null if nothing is selected. */
 export function currentSelection(): Selected | null {
@@ -374,7 +205,9 @@ function quickPrompt(action: QuickAction, lang: string) {
     case "define":
       return "Define the selected term or phrase as it is used here, in one or two sentences, then give a short example if it helps.";
     case "translate":
-      return `Translate the selected passage into ${lang}. Reply with only the translation. If it is already in ${lang}, translate it into English instead.`;
+      return `Translate the selected passage into ${lang}.`;
+    case "summarize":
+      return `Summarize the selected passage${lang === "English" ? "" : ` and translate the summary into ${lang}`}.`;
   }
 }
 
@@ -382,7 +215,8 @@ type Card = { el: HTMLElement; run: Run; sel: Selected; action: QuickAction; ans
 let card: Card | null = null;
 
 export function askAboutSelection(action: QuickAction, sel: Selected) {
-  void withKey(() => void showCard(action, sel));
+  const show = () => void showCard(action, sel);
+  void (HF_ACTIONS.includes(action) ? withHfToken(show) : withKey(show));
 }
 
 async function showCard(action: QuickAction, sel: Selected) {
@@ -404,7 +238,8 @@ async function showCard(action: QuickAction, sel: Selected) {
     </footer>`;
   el.querySelector(".ai-title")!.textContent = QUICK_ACTIONS.find((a) => a.id === action)!.label;
   // Below the selection, or above it when it's near the bottom of the page.
-  el.style.left = `${Math.min(Math.max(0, sel.x / size.width), 0.55) * 100}%`;
+  // Keep the card inside the page, however narrow the page is.
+  el.style.left = `max(0px, min(${(sel.x / size.width) * 100}%, 100% - 340px))`;
   if (sel.bottom / size.height < 0.62) el.style.top = `calc(${(sel.bottom / size.height) * 100}% + 6px)`;
   else el.style.bottom = `calc(${(1 - sel.y / size.height) * 100}% + 6px)`;
   page.append(el);
@@ -413,14 +248,17 @@ async function showCard(action: QuickAction, sel: Selected) {
   card = c;
   registerOverlay(el, closeCard);
 
-  const lang = (await getSetting<string>("aiLanguage")) ?? "English";
+  const hf = HF_ACTIONS.includes(action);
+  const lang = await hfLanguage();
   const langSel = el.querySelector<HTMLSelectElement>(".ai-lang")!;
-  if (action === "translate") {
+  if (hf) {
     langSel.hidden = false;
-    for (const l of LANGUAGES) langSel.append(new Option(l, l, false, l === lang));
+    if (action === "summarize") langSel.append(new Option("English only", "en", false, lang === "en"));
+    for (const l of LANGS) langSel.append(new Option(`${l.name} · ${l.native}`, l.id, false, l.id === lang));
+    if (action === "translate" && lang === "en") langSel.value = "hi";
     langSel.addEventListener("change", () => {
-      void setSetting("aiLanguage", langSel.value);
-      void showCard("translate", sel);
+      void setSetting("hfLanguage", langSel.value);
+      void showCard(action, sel);
     });
   }
   el.querySelector(".ai-x")!.addEventListener("click", closeCard);
@@ -441,6 +279,7 @@ async function showCard(action: QuickAction, sel: Selected) {
   });
 
   const body = el.querySelector<HTMLElement>(".ai-body")!;
+  if (hf) return runHfCard(c, body, langSel.value as LangId | "en");
   const render = renderer(body);
   try {
     const context = await pageText(sel.n);
@@ -476,6 +315,55 @@ async function showCard(action: QuickAction, sel: Selected) {
       body.firstElementChild!.textContent = friendly(e);
       if (needsSetup(e)) void openKeySetup(() => void showCard(action, sel));
     }
+  }
+}
+
+/**
+ * Translate, or summarize then translate, with Hugging Face models. The card shows each step, then
+ * the English summary and/or the translation (right-to-left for Arabic).
+ */
+async function runHfCard(c: Card, body: HTMLElement, lang: LangId | "en") {
+  const wait = body.querySelector<HTMLElement>(".ai-wait")!;
+  const step = (text: string) => card === c && (wait.textContent = text);
+  const section = (title: string, text: string, l?: LangId) => {
+    const h = document.createElement("h4");
+    h.textContent = title;
+    const p = document.createElement("p");
+    p.textContent = text;
+    if (l) {
+      p.lang = l;
+      p.dir = langInfo(l).rtl ? "rtl" : "ltr";
+      p.className = "ai-translation";
+    }
+    return [h, p];
+  };
+  try {
+    const parts: HTMLElement[] = [];
+    const plainParts: string[] = [];
+    let source = c.sel.text;
+    if (c.action === "summarize") {
+      if (source.length < MIN_SUMMARY_CHARS) {
+        parts.push(...section("Summary (English)", "This passage is already short, so it isn't summarized."));
+      } else {
+        source = await summarize(source, step);
+        parts.push(...section("Summary (English)", source));
+        plainParts.push(`Summary: ${source}`);
+      }
+    }
+    if (lang !== "en") {
+      const l = langInfo(lang);
+      const translated = await translate(source, lang, step);
+      parts.push(...section(`${l.name} · ${l.native}`, translated, lang));
+      plainParts.push(c.action === "summarize" ? `${l.name}: ${translated}` : translated);
+    }
+    if (card !== c) return;
+    c.answer = plainParts.join("\n\n");
+    body.replaceChildren(...parts);
+  } catch (e) {
+    if (card !== c) return;
+    body.innerHTML = `<p class="ai-error"></p>`;
+    body.firstElementChild!.textContent = friendly(e);
+    if (needsSetup(e)) void openKeySetup(() => void showCard(c.action, c.sel), "hf");
   }
 }
 
@@ -942,7 +830,7 @@ async function summarise(kind: SummaryKind) {
 /** Continue a quick answer in the chat: the passage and the answer become the start of the conversation. */
 function followUp(c: Card) {
   const label = QUICK_ACTIONS.find((a) => a.id === c.action)!.label;
-  const question = `${quickPrompt(c.action, "English")}\n\nPassage from p. ${c.sel.n}:\n"${c.sel.text}"`;
+  const question = `${quickPrompt(c.action, c.el.querySelector<HTMLSelectElement>(".ai-lang")?.selectedOptions[0]?.textContent ?? "English")}\n\nPassage from p. ${c.sel.n}:\n"${c.sel.text}"`;
   const turn = addTurn(`${label}: “${c.sel.text.length > 120 ? c.sel.text.slice(0, 120) + "…" : c.sel.text}”`);
   turn.answer.innerHTML = markdown(c.answer);
   history.push({ role: "user", content: question }, { role: "assistant", content: c.answer });
@@ -985,6 +873,8 @@ keyLink.addEventListener("click", () => openKeySetup());
 keyLink.addEventListener("keydown", (e) => {
   if (e.key === "Enter") openKeySetup();
 });
+
+aiEvents.addEventListener("change", () => resetChat());
 
 /** Start the conversation over (a new document, or a different provider or model). */
 function resetChat() {

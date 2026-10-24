@@ -7,7 +7,7 @@ import { askAboutSelection, currentSelection, QUICK_ACTIONS, toggleChat, type Se
 
 const R_TOOLS = 70; // radius of the tool ring
 const R_OPTIONS = 120; // radius of the colour / size ring
-const EDGE = 160; // keep the whole menu inside the window
+const EDGE = 175; // keep the whole menu inside the window
 
 /**
  * Two-tone icons on a 24×24 grid: outline in the button's text colour, a soft tinted body, and one
@@ -219,9 +219,11 @@ function showAiOptions() {
     for (const a of QUICK_ACTIONS) pill(a.label, `${a.label} the selected text`, () => askAboutSelection(a.id, sel));
     pill("Ask…", "Ask about this PDF (c)", toggleChat);
   } else pill("Ask this PDF", "Chat about this PDF and summarise it (c)", toggleChat);
-  const step = 36;
+  // Pills are wider than the round options: with more of them, use a wider ring so they don't touch.
+  const radius = items.length > 5 ? R_OPTIONS + 16 : R_OPTIONS + 4;
+  const step = items.length > 5 ? 35 : 36;
   items.forEach((el, i) => {
-    place(el, -90 + (i - (items.length - 1) / 2) * step, R_OPTIONS + 4);
+    place(el, -90 + (i - (items.length - 1) / 2) * step, radius);
     menu.append(el);
   });
 }

@@ -21,6 +21,15 @@ export class AiError extends Error {
   }
 }
 
+/** A message for the user. */
+export function friendly(e: unknown): string {
+  if (e instanceof AiError) return e.message;
+  return `Something went wrong: ${e instanceof Error ? e.message : String(e)}`;
+}
+
+/** Fires "change" when the provider, model or keys change (the chat starts over). */
+export const aiEvents = new EventTarget();
+
 // ---------------------------------------------------------------------------
 // Providers
 
