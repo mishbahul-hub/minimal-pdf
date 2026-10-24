@@ -4,6 +4,7 @@ import { TOOLS, getStyle, getTool, setStyle, setTool, type Tool } from "./annota
 import { registerOverlay, unregisterOverlay } from "./overlays";
 import { getDoc } from "./viewer";
 import { askAboutSelection, currentSelection, QUICK_ACTIONS, toggleChat, type Selected } from "./ai";
+import { openSettings } from "./aisettings";
 
 const R_TOOLS = 70; // radius of the tool ring
 const R_OPTIONS = 120; // radius of the colour / size ring
@@ -75,7 +76,7 @@ function place(el: HTMLElement, angleDeg: number, radius: number) {
 }
 
 function build() {
-  menu.querySelectorAll(".tool, .opt, .center").forEach((el) => el.remove());
+  menu.querySelectorAll(".tool, .opt, .center, .gear").forEach((el) => el.remove());
 
   SLOTS.forEach((id, i) => {
     const b = document.createElement("button");
@@ -96,6 +97,20 @@ function build() {
   center.title = "Close";
   center.addEventListener("click", closeRadial);
   menu.append(center);
+
+  // Settings, at the bottom of the outer ring (the options fan out from the top, so it's always free).
+  const gear = document.createElement("button");
+  gear.type = "button";
+  gear.className = "gear";
+  gear.title = "Settings (Ctrl+,)";
+  gear.setAttribute("aria-label", "Settings");
+  gear.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`;
+  place(gear, 90, R_OPTIONS);
+  gear.addEventListener("click", () => {
+    closeRadial();
+    void openSettings();
+  });
+  menu.append(gear);
   shownFor = null;
   refresh();
 }

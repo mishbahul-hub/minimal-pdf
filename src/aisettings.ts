@@ -1,7 +1,10 @@
-// AI settings (Ctrl+,), in three tabs: the chat provider and model, the Hugging Face models for
-// translation and summaries, and the API keys saved on this computer (with Remove). Keys go to Rust
-// (Windows Credential Manager); only provider and model names are kept in settings.json.
+// Settings (Ctrl+,, the gear in the right-click menu and the chat, or the start screen), in tabs:
+// General (theme, translation language, version), the chat AI provider and model, the Hugging Face
+// models for translation and summaries, and the API keys saved on this computer (with Remove).
+// Keys go to Rust (Windows Credential Manager); everything else is kept in settings.json.
+import { getVersion } from "@tauri-apps/api/app";
 import { showIndicator } from "./viewer";
+import { getSetting, getTheme, setSetting, setTheme, THEMES, type Theme } from "./settings";
 import { registerOverlay, unregisterOverlay } from "./overlays";
 import {
   aiEvents,
@@ -20,7 +23,7 @@ import {
 } from "./llm";
 import { getHfModels, LANGS, servedModels, setHfModels, SUGGESTED, translate, type HfModels, type LangId } from "./hf";
 
-export type SettingsTab = "chat" | "hf" | "keys";
+export type SettingsTab = "general" | "chat" | "hf" | "keys";
 
 const el = document.createElement("div");
 el.id = "ai-key";
@@ -28,16 +31,34 @@ el.hidden = true;
 el.innerHTML = `
   <div class="panel">
     <header>
-      <h2>AI settings</h2>
+      <h2>Settings</h2>
       <button type="button" class="ai-x" title="Close (Esc)" aria-label="Close">×</button>
     </header>
     <nav class="tabs" role="tablist">
+      <button type="button" role="tab" data-tab="general">General</button>
       <button type="button" role="tab" data-tab="chat">Chat AI</button>
       <button type="button" role="tab" data-tab="hf">Translate &amp; summarize</button>
       <button type="button" role="tab" data-tab="keys">API keys</button>
     </nav>
 
-    <form class="tab" data-tab="chat">
+    <div class="tab" data-tab="general">
+      <label>Theme</label>
+      <div class="segmented themes" role="group" aria-label="Theme">
+        <button type="button" data-theme-pick="light">Light</button>
+        <button type="button" data-theme-pick="dark">Dark</button>
+        <button type="button" data-theme-pick="sepia">Sepia</button>
+      </div>
+      <p class="hint">Also with the d key.</p>
+      <label>Translate and summarize into
+        <select name="hflang"></select>
+      </label>
+      <p class="hint">The language the Translate and Summarize buttons use. You can also change it in the answer card.</p>
+      <label>Keyboard shortcuts</label>
+      <p class="hint">Press ? at any time to see every shortcut.</p>
+      <p class="about"></p>
+    </div>
+
+    <form class="tab" data-tab="chat" hidden>
       <p>Chat, explanations and PDF summaries. Use a free key from Google AI Studio, Groq, Hugging Face
       or OpenRouter, a model running on this computer with Ollama, or Claude.</p>
       <label>Provider <select name="provider"></select></label>
@@ -90,7 +111,12 @@ const tabButtons = [...el.querySelectorAll<HTMLButtonElement>(".tabs button")];
 const tabs = [...el.querySelectorAll<HTMLElement>(".tab")];
 let afterSave: (() => void) | null = null;
 
-/** Open the settings (Ctrl+,) on a tab. `then` runs once that tab's setup is saved and works. */
+/** Open Settings on a tab (Ctrl+, opens General). */
+export function openSettings(tab: SettingsTab = "general") {
+  return openKeySetup(undefined, tab);
+}
+
+/** Open the settings on a tab. `then` runs once that tab's setup is saved and works. */
 export async function openKeySetup(then?: () => void, tab: SettingsTab = "chat") {
   afterSave = then ?? null;
   if (el.hidden) {
@@ -110,7 +136,8 @@ function close() {
 async function showTab(tab: SettingsTab) {
   for (const b of tabButtons) b.setAttribute("aria-selected", String(b.dataset.tab === tab));
   for (const t of tabs) t.hidden = t.dataset.tab !== tab;
-  if (tab === "chat") await showChat();
+  if (tab === "general") await showGeneral();
+  else if (tab === "chat") await showChat();
   else if (tab === "hf") await showHf();
   else await showKeys();
 }
@@ -126,6 +153,12 @@ el.addEventListener("keydown", (e) => {
     e.stopPropagation();
     close();
   }
+});
+
+// Anything marked data-open-settings (start screen, chat panel) opens Settings on that tab.
+document.addEventListener("click", (e) => {
+  const opener = (e.target as Element).closest<HTMLElement>("[data-open-settings]");
+  if (opener) void openSettings((opener.dataset.openSettings || "general") as SettingsTab);
 });
 
 /** The tab's work is done: close and run what was waiting for it. */
@@ -147,6 +180,41 @@ export async function withHfToken(fn: () => void) {
   if (await hasKey("huggingface")) fn();
   else void openKeySetup(fn, "hf");
 }
+
+// ---------------------------------------------------------------------------
+// General
+
+const general = el.querySelector<HTMLElement>('.tab[data-tab="general"]')!;
+const themeButtons = [...general.querySelectorAll<HTMLButtonElement>("[data-theme-pick]")];
+const langSelect = general.querySelector<HTMLSelectElement>('[name="hflang"]')!;
+langSelect.append(new Option("English only (summaries)", "en"));
+for (const l of LANGS) langSelect.append(new Option(`${l.name} · ${l.native}`, l.id));
+
+async function showGeneral() {
+  markTheme();
+  const lang = await getSetting<string>("hfLanguage");
+  langSelect.value = lang && [...langSelect.options].some((o) => o.value === lang) ? lang : "hi";
+  general.querySelector(".about")!.textContent = `Minimal PDF ${await getVersion().catch(() => "")}`;
+  (themeButtons.find((b) => b.getAttribute("aria-pressed") === "true") ?? themeButtons[0]).focus();
+}
+
+function markTheme() {
+  const theme = getTheme();
+  for (const b of themeButtons) b.setAttribute("aria-pressed", String(b.dataset.themePick === theme));
+}
+
+for (const b of themeButtons) {
+  b.addEventListener("click", async () => {
+    const theme = b.dataset.themePick as Theme;
+    if (THEMES.includes(theme)) await setTheme(theme);
+    markTheme();
+  });
+}
+
+langSelect.addEventListener("change", () => {
+  void setSetting("hfLanguage", langSelect.value);
+  showIndicator("Saved");
+});
 
 // ---------------------------------------------------------------------------
 // Chat AI

@@ -84,8 +84,11 @@ provider to use. Change it any time with `Ctrl+,`.
 | **Anthropic Claude** | paid | [console.anthropic.com](https://console.anthropic.com/settings/keys) |
 | **Other** | any service with an OpenAI-compatible API | enter its address (base URL) and key |
 
-`Ctrl+,` opens **AI settings**, with three tabs:
+**Settings** opens with `Ctrl+,`, the ⚙ gear at the bottom of the right-click menu, the ⚙ in the
+chat panel, or the **Settings** button on the start screen. It has four tabs:
 
+- **General:** theme (light, dark, sepia), the language Translate and Summarize use, and the app
+  version.
 - **Chat AI:** pick the provider, paste the key, and press **Load models** to choose from the
   models that provider offers right now (model names change often; the app suggests a default).
   **Save and test** sends a one-word test request before saving.
@@ -226,7 +229,7 @@ key handling and streaming in [src-tauri/src/ai.rs](src-tauri/src/ai.rs).
 | `t` | Table of contents |
 | `a` or right-click | Annotation tools (and AI actions on selected text) |
 | `c` | Ask AI about this PDF: chat and summaries |
-| `Ctrl+,` | AI settings: chat provider, translation and summary models, API keys |
+| `Ctrl+,` | Settings: theme, chat provider, translation and summary models, API keys |
 | `Ctrl+Z` / `Ctrl+Y` | Undo / redo annotations |
 | `1`–`9` | Open a recent file (start screen) |
 | `?` | Show all shortcuts |

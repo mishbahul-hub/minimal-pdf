@@ -16,8 +16,8 @@ import {
 } from "./viewer";
 
 export type Theme = "light" | "dark" | "sepia";
-const THEMES: Theme[] = ["light", "dark", "sepia"];
-const THEME_NAMES: Record<Theme, string> = { light: "Light theme", dark: "Dark theme", sepia: "Sepia theme" };
+export const THEMES: Theme[] = ["light", "dark", "sepia"];
+export const THEME_NAMES: Record<Theme, string> = { light: "Light theme", dark: "Dark theme", sepia: "Sepia theme" };
 
 type SavedPosition = Position & { opened: number; size: number };
 type Recent = { path: string; name: string; opened: number };
@@ -69,12 +69,19 @@ async function initTheme() {
   if (saved && THEMES.includes(saved)) applyTheme(saved);
 }
 
+export function getTheme(): Theme {
+  return (document.documentElement.dataset.theme as Theme) ?? "light";
+}
+
+export async function setTheme(theme: Theme) {
+  applyTheme(theme);
+  showIndicator(THEME_NAMES[theme]);
+  await (await storeReady).set("theme", theme);
+}
+
 export async function cycleTheme() {
-  const current = (document.documentElement.dataset.theme as Theme) ?? "light";
-  const next = THEMES[(THEMES.indexOf(current) + 1) % THEMES.length];
-  applyTheme(next);
-  showIndicator(THEME_NAMES[next]);
-  await (await storeReady).set("theme", next);
+  const current = getTheme();
+  await setTheme(THEMES[(THEMES.indexOf(current) + 1) % THEMES.length]);
 }
 
 // ---------------------------------------------------------------------------
@@ -177,13 +184,27 @@ function recentList(): Node | null {
   return wrap;
 }
 
+/** Under the start message: the recent files, and a way into Settings. */
+function startExtras(): Node {
+  const frag = document.createDocumentFragment();
+  const recent = recentList();
+  if (recent) frag.append(recent);
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "start-settings";
+  b.dataset.openSettings = "general"; // handled in aisettings.ts
+  b.innerHTML = `<span>Settings</span><kbd>Ctrl+,</kbd>`;
+  frag.append(b);
+  return frag;
+}
+
 // ---------------------------------------------------------------------------
 // Wiring
 
 export async function initSettings() {
   await initTheme();
   await loadRecents();
-  setStartExtras(recentList);
+  setStartExtras(startExtras);
 
   events.addEventListener("open", async (e) => {
     const doc = (e as CustomEvent<DocInfo>).detail;

@@ -951,6 +951,38 @@ svg.ink text {
   stroke-linecap: round;
 }
 
+/* Settings gear at the bottom of the radial menu */
+#radial .gear {
+  width: 30px;
+  height: 30px;
+  color: var(--muted);
+  background:
+    linear-gradient(180deg, var(--glass-tint-strong), rgba(255, 255, 255, 0.04) 60%),
+    var(--glass-tint);
+  border: 1px solid var(--glass-edge);
+  box-shadow:
+    inset 0 1px 1px var(--glass-shine),
+    0 3px 8px var(--glass-drop);
+  transition: transform 0.12s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+
+#radial .gear:hover,
+#radial .gear:focus-visible {
+  color: var(--text);
+  transform: translate(-50%, -50%) scale(1.12) rotate(30deg);
+}
+
+#radial .gear svg,
+.ai-gear svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 /* AI slot and actions in the radial menu */
 #radial .tool.ai {
   color: var(--accent);
@@ -1047,6 +1079,24 @@ svg.ink text {
   font-size: 18px;
   line-height: 1;
   cursor: pointer;
+}
+
+.ai-gear {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.ai-gear:hover {
+  color: var(--text);
+  background: var(--hover);
 }
 
 .ai-x:hover {
@@ -1375,6 +1425,55 @@ svg.ink text {
   background: var(--panel-bg);
   border-color: var(--panel-border);
   border-bottom-color: var(--panel-bg);
+}
+
+#ai-key .segmented {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+#ai-key .segmented button {
+  flex: 1;
+}
+
+#ai-key .segmented button[aria-pressed="true"] {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+#ai-key .about {
+  margin-top: 16px;
+  font-size: 12px;
+}
+
+/* Start screen: the way into Settings */
+.start-settings {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--muted);
+  background: none;
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.start-settings:hover,
+.start-settings:focus-visible {
+  color: var(--text);
+  border-color: var(--accent);
+  outline: none;
+}
+
+.start-settings kbd {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 11px;
 }
 
 #ai-key fieldset {
