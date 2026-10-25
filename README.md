@@ -25,6 +25,9 @@ The installer is about 3 MB, and the installed app about 8.5 MB (it uses the Web
   Groq, Hugging Face or OpenRouter, with Ollama offline, or with Claude): select text and right-click
   to explain, simplify, define or translate it; press `c` to chat with the whole PDF or summarise a
   page, section or the document, with answers that cite the pages they came from.
+- **Save with annotations:** the save button in the right-click menu (or `Ctrl+S`) writes a new
+  PDF with your highlights, drawings and comments drawn in, so they show in any PDF reader.
+  "Save copy" (`Ctrl+Shift+S`) saves an exact copy.
 - **Never modifies your PDFs.** Annotations and settings are stored separately (see
   [Where your data lives](#where-your-data-lives)).
 - Opens PDFs by double-click once installed, and reuses the open window.
@@ -217,6 +220,8 @@ key handling and streaming in [src-tauri/src/ai.rs](src-tauri/src/ai.rs).
 | Key | Action |
 |---|---|
 | `Ctrl+O` | Open a file |
+| `Ctrl+S` | Save a copy of the PDF with your annotations drawn in |
+| `Ctrl+Shift+S` | Save an exact copy of the PDF |
 | `j` / `k`, `↓` / `↑` | Scroll a little |
 | `Space` / `Shift+Space` | Next / previous screen |
 | `n` / `p`, `→` / `←` | Next / previous page |

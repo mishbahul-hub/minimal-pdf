@@ -5,6 +5,7 @@ import { registerOverlay, unregisterOverlay } from "./overlays";
 import { getDoc } from "./viewer";
 import { askAboutSelection, currentSelection, QUICK_ACTIONS, toggleChat, type Selected } from "./ai";
 import { openSettings } from "./aisettings";
+import { savePdf } from "./export";
 
 const R_TOOLS = 70; // radius of the tool ring
 const R_OPTIONS = 120; // radius of the colour / size ring
@@ -105,12 +106,24 @@ function build() {
   gear.title = "Settings (Ctrl+,)";
   gear.setAttribute("aria-label", "Settings");
   gear.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`;
-  place(gear, 90, R_OPTIONS);
+  place(gear, 74, R_OPTIONS);
   gear.addEventListener("click", () => {
     closeRadial();
     void openSettings();
   });
   menu.append(gear);
+
+  // Save, next to the gear: shows "Save with annotations" and "Save copy" on the outer ring.
+  const saveBtn = document.createElement("button");
+  saveBtn.type = "button";
+  saveBtn.className = "gear save";
+  saveBtn.title = "Save PDF (Ctrl+S)";
+  saveBtn.setAttribute("aria-label", "Save PDF");
+  saveBtn.innerHTML =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>';
+  place(saveBtn, 106, R_OPTIONS);
+  saveBtn.addEventListener("click", showSaveOptions);
+  menu.append(saveBtn);
   shownFor = null;
   refresh();
 }
@@ -240,6 +253,29 @@ function showAiOptions() {
   items.forEach((el, i) => {
     place(el, -90 + (i - (items.length - 1) / 2) * step, radius);
     menu.append(el);
+  });
+}
+
+/** Outer ring after the save button: the two ways to save. */
+function showSaveOptions() {
+  shownFor = null;
+  menu.querySelectorAll(".opt").forEach((el) => el.remove());
+  const choices: [string, string, () => void][] = [
+    ["Save with annotations", "A new PDF with your highlights, drawings and comments drawn in (Ctrl+S)", () => void savePdf("annotated")],
+    ["Save copy", "An exact copy of the PDF, without annotations (Ctrl+Shift+S)", () => void savePdf("copy")],
+  ];
+  choices.forEach(([label, title, onPick], i) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "opt ai-act";
+    b.textContent = label;
+    b.title = title;
+    b.addEventListener("click", () => {
+      closeRadial();
+      onPick();
+    });
+    place(b, -90 + (i - 0.5) * 44, R_OPTIONS + 16);
+    menu.append(b);
   });
 }
 

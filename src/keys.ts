@@ -21,6 +21,7 @@ import { dropTool, redo, undo } from "./annotate";
 import { openRadial } from "./radial";
 import { toggleChat } from "./ai";
 import { openSettings } from "./aisettings";
+import { savePdf } from "./export";
 
 type Action = (e: KeyboardEvent) => void | Promise<unknown>;
 
@@ -38,6 +39,8 @@ export type Binding = {
 // The single keymap. The ? help overlay is generated from it, so edit shortcuts only here.
 export const KEYMAP: Binding[] = [
   { keys: ["Ctrl+o"], label: "Ctrl+O", help: "Open file", action: openPdf },
+  { keys: ["Ctrl+s"], label: "Ctrl+S", help: "Save a copy with your annotations drawn in", action: () => savePdf("annotated") },
+  { keys: ["Ctrl+Shift+s"], label: "Ctrl+Shift+S", help: "Save an exact copy of the PDF", action: () => savePdf("copy") },
   { keys: ["j", "ArrowDown"], label: "j / ↓", help: "Scroll down a little", action: () => scrollLines(1), repeat: true },
   { keys: ["k", "ArrowUp"], label: "k / ↑", help: "Scroll up a little", action: () => scrollLines(-1), repeat: true },
   { keys: ["Space", "PageDown"], label: "Space", help: "Next screen", action: () => scrollScreens(1), repeat: true },

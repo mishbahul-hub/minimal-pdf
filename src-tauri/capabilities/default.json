@@ -11,6 +11,8 @@
     "dialog:allow-open",
     "fs:allow-read-file",
     "store:default",
-    "updater:default"
+    "updater:default",
+    "dialog:allow-save",
+    "fs:allow-write-file"
   ]
 }
