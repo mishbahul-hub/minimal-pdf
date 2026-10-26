@@ -1014,6 +1014,16 @@ svg.ink text {
   background: var(--accent);
 }
 
+/* Save choices, stacked above the tool ring */
+#radial .opt.save-choice {
+  min-width: 190px;
+}
+
+#radial .opt.save-choice.danger:hover,
+#radial .opt.save-choice.danger:focus-visible {
+  background: #c62828;
+}
+
 /* Settings gear at the bottom of the radial menu */
 #radial .gear {
   width: 30px;

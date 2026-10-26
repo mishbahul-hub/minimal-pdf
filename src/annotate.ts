@@ -725,9 +725,20 @@ events.addEventListener("scroll", () => {
   if (tool !== "pointer") updateCursor();
 });
 
-/** For tests: the current document's annotations. */
+/** The current document's annotations, by page. */
 export function getAnnotations() {
   return Object.fromEntries(pages);
+}
+
+/** Forget every annotation of the current document (after they were drawn into the PDF itself). Not undoable. */
+export async function clearAllAnnotations() {
+  if (editor) commitEditor();
+  const touched = [...pages.keys()];
+  pages = new Map();
+  undoStack = [];
+  redoStack = [];
+  for (const n of touched) renderPage(n);
+  await saveNotes();
 }
 
 // ---------------------------------------------------------------------------

@@ -25,10 +25,11 @@ The installer is about 3 MB, and the installed app about 8.5 MB (it uses the Web
   Groq, Hugging Face or OpenRouter, with Ollama offline, or with Claude): select text and right-click
   to explain, simplify, define or translate it; press `c` to chat with the whole PDF or summarise a
   page, section or the document, with answers that cite the pages they came from.
-- **Save with annotations:** the save button in the right-click menu (or `Ctrl+S`) writes a new
-  PDF with your highlights, drawings and comments drawn in, so they show in any PDF reader.
-  "Save copy" (`Ctrl+Shift+S`) saves an exact copy.
-- **Never modifies your PDFs.** Annotations and settings are stored separately (see
+- **Save with annotations:** the save button in the right-click menu offers **New PDF with
+  annotations** (`Ctrl+S`: your highlights, drawings and comments drawn in, so they show in any PDF
+  reader), **Plain copy** (`Ctrl+Shift+S`), and **Replace original**, which draws the annotations
+  permanently into the original file after asking you to confirm.
+- **Never modifies your PDFs** unless you choose Replace original. Annotations and settings are stored separately (see
   [Where your data lives](#where-your-data-lives)).
 - Opens PDFs by double-click once installed, and reuses the open window.
 

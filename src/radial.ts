@@ -5,11 +5,12 @@ import { registerOverlay, unregisterOverlay } from "./overlays";
 import { getDoc } from "./viewer";
 import { askAboutSelection, currentSelection, QUICK_ACTIONS, toggleChat, type Selected } from "./ai";
 import { openSettings } from "./aisettings";
-import { savePdf } from "./export";
+import { replaceOriginal, savePdf } from "./export";
 
 const R_TOOLS = 70; // radius of the tool ring
 const R_OPTIONS = 120; // radius of the colour / size ring
 const EDGE = 175; // keep the whole menu inside the window
+const EDGE_TOP = 205; // more room above: the save choices stack over the menu
 
 /**
  * Two-tone icons on a 24×24 grid: outline in the button's text colour, a soft tinted body, and one
@@ -120,7 +121,8 @@ function build() {
   saveBtn.title = "Save PDF (Ctrl+S)";
   saveBtn.setAttribute("aria-label", "Save PDF");
   saveBtn.innerHTML =
-    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>';
+    // A floppy disk: the save icon everyone recognises.
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg>';
   place(saveBtn, 106, R_OPTIONS);
   saveBtn.addEventListener("click", showSaveOptions);
   menu.append(saveBtn);
@@ -263,14 +265,15 @@ function showAiOptions() {
   });
 }
 
-/** Outer ring after the save button: the two ways to save. */
+/** After the save button: the ways to save, stacked above the tool ring. */
 function showSaveOptions() {
   shownFor = null;
   savePinned = true;
   menu.querySelectorAll(".opt").forEach((el) => el.remove());
   const choices: [string, string, () => void][] = [
-    ["Save with annotations", "A new PDF with your highlights, drawings and comments drawn in (Ctrl+S)", () => void savePdf("annotated")],
-    ["Save copy", "An exact copy of the PDF, without annotations (Ctrl+Shift+S)", () => void savePdf("copy")],
+    ["Replace original", "Draw your annotations permanently into this PDF file (asks first)", () => void replaceOriginal()],
+    ["New PDF with annotations", "Save a new PDF with your highlights, drawings and comments drawn in (Ctrl+S)", () => void savePdf("annotated")],
+    ["Plain copy", "Save an exact copy of the PDF, without annotations (Ctrl+Shift+S)", () => void savePdf("copy")],
   ];
   choices.forEach(([label, title, onPick], i) => {
     const b = document.createElement("button");
@@ -282,7 +285,10 @@ function showSaveOptions() {
       closeRadial();
       onPick();
     });
-    place(b, -90 + (i - 0.5) * 44, R_OPTIONS + 16);
+    b.classList.add("save-choice");
+    if (i === 0) b.classList.add("danger");
+    b.style.left = "0px";
+    b.style.top = `${-112 - (choices.length - 1 - i) * 36}px`;
     menu.append(b);
   });
 }
@@ -311,7 +317,7 @@ export function openRadial(x?: number, y?: number, sel: Selected | null = null) 
   const px = x ?? lastPointer?.x ?? window.innerWidth / 2;
   const py = y ?? lastPointer?.y ?? window.innerHeight / 2;
   menu.style.left = `${Math.min(window.innerWidth - EDGE, Math.max(EDGE, px))}px`;
-  menu.style.top = `${Math.min(window.innerHeight - EDGE, Math.max(EDGE, py))}px`;
+  menu.style.top = `${Math.min(window.innerHeight - EDGE, Math.max(EDGE_TOP, py))}px`;
   selected = sel ? "ai" : getTool();
   build();
   showOptions(selected, true);

@@ -13,6 +13,7 @@
     "store:default",
     "updater:default",
     "dialog:allow-save",
-    "fs:allow-write-file"
+    "fs:allow-write-file",
+    "dialog:allow-ask"
   ]
 }

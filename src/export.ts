@@ -1,11 +1,12 @@
-// Save a copy of the open PDF (Ctrl+Shift+S), or a copy with the annotations drawn into it (Ctrl+S),
-// so they show in any PDF reader. The original file is never written: the save dialog refuses it.
-import { save } from "@tauri-apps/plugin-dialog";
+// Save the annotations into the PDF so they show in any PDF reader: as a new PDF (Ctrl+S), or into
+// the original file itself (Replace original, only after the user confirms); or save a plain copy
+// (Ctrl+Shift+S). Saving a copy over the open file is refused: replacing it is its own, confirmed action.
+import { ask, save } from "@tauri-apps/plugin-dialog";
 import { writeFile } from "@tauri-apps/plugin-fs";
 import { BlendMode, LineCapStyle, PDFDocument, rgb, StandardFonts, type PDFFont, type PDFPage } from "pdf-lib";
 import * as pdfjs from "pdfjs-dist";
-import { getDoc, getPdfDocument, getPdfPage, showIndicator } from "./viewer";
-import { FONTS, getAnnotations, type FontKey } from "./annotate";
+import { getDoc, getPdfDocument, getPdfPage, getPosition, openPath, setPosition, showIndicator } from "./viewer";
+import { clearAllAnnotations, FONTS, getAnnotations, type FontKey } from "./annotate";
 
 const CSS_TO_PT = 72 / 96; // annotation units are CSS px at zoom 1; PDF units are points
 const LINE_HEIGHT = 1.25; // same as the on-page comments
@@ -28,7 +29,7 @@ export async function savePdf(mode: Mode) {
     filters: [{ name: "PDF", extensions: ["pdf"] }],
   });
   if (!path) return;
-  if (sameFile(path, doc.key)) return showIndicator("Choose another name: the original PDF is never changed");
+  if (sameFile(path, doc.key)) return showIndicator("To change the original PDF, use Replace original in the save menu");
 
   showIndicator("Saving…");
   try {
@@ -41,6 +42,39 @@ export async function savePdf(mode: Mode) {
     showIndicator(imageNotes ? `Saved ${name} (${imageNotes} comment${imageNotes > 1 ? "s" : ""} as images)` : `Saved ${name}`);
   } catch (e) {
     showIndicator(`Couldn't save: ${e instanceof Error ? e.message : String(e)}`);
+  }
+}
+
+/**
+ * Draw the annotations permanently into the original PDF file, after asking. They then stop being
+ * separate (editable) annotations: the file is reopened and shows them as part of the pages.
+ */
+export async function replaceOriginal() {
+  const doc = getDoc();
+  const pdf = getPdfDocument() && (await getPdfDocument());
+  if (!doc || !pdf) return showIndicator("Open a PDF first");
+  if (!/[\\/]/.test(doc.key)) return showIndicator("This PDF has no file on disk to replace");
+  const count = Object.values(getAnnotations()).reduce((n, list) => n + list.length, 0);
+  if (!count) return showIndicator("No annotations to save into the PDF");
+  const ok = await ask(
+    `Draw your ${count} annotation${count > 1 ? "s" : ""} permanently into “${doc.name}”?\n\n` +
+      "The original file is replaced. Afterwards the annotations are part of the pages: they can't be edited, moved or erased in this app, and this can't be undone.\n\nTo keep the original, use “New PDF with annotations” instead.",
+    { title: "Replace the original PDF?", kind: "warning", okLabel: "Replace original", cancelLabel: "Cancel" },
+  );
+  if (!ok) return;
+
+  showIndicator("Saving…");
+  try {
+    const { bytes, imageNotes } = await withAnnotations(await pdf.getData());
+    const pos = getPosition();
+    await writeFile(doc.key, bytes);
+    await clearAllAnnotations(); // they're in the file now; keeping them would draw them twice
+    if (await openPath(doc.key)) {
+      if (pos) setPosition(pos);
+      showIndicator(imageNotes ? `Saved into ${doc.name} (${imageNotes} comment${imageNotes > 1 ? "s" : ""} as images)` : `Saved into ${doc.name}`);
+    }
+  } catch (e) {
+    showIndicator(`Couldn't replace the PDF (is it open in another program?): ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 
