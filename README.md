@@ -66,7 +66,7 @@ model running on your own computer, or with Claude. The first time you use one, 
 provider to use. Change it any time with `Ctrl+,`.
 
 - **Selected text:** select some text, right-click it, and pick **Explain**, **Simplify** or
-  **Define** (answered by your chat AI), or **Translate** or **Summarize** (Hugging Face models, see
+  **Define** (answered by your chat AI), or **Translate** or **Summarize** (offline models, see
   below) from the ring. The answer appears in a small card next to the text; you can copy it,
   **save it as a comment** on the page, or **ask a follow-up** in the chat.
 - **Chat with the PDF** (`c`, or the ✦ button in the ring): ask anything about the document. The
@@ -97,7 +97,7 @@ chat panel, or the **Settings** button on the start screen. It has four tabs:
 - **Chat AI:** pick the provider, paste the key, and press **Load models** to choose from the
   models that provider offers right now (model names change often; the app suggests a default).
   **Save and test** sends a one-word test request before saving.
-- **Translate & summarize:** your Hugging Face token and the model for each task (see below).
+- **Translate & summarize:** the offline translation and summary models: downloaded or not, download now, remove (see below).
 - **API keys:** every key saved on this computer, what it's used for, and a **Remove** button.
 
 Keys are kept in **Windows Credential Manager**, never in the app's files. The provider, model,
@@ -110,37 +110,35 @@ Ollama the app sends fewer pages per request. If you see "too many requests", wa
 reads go to the provider you chose; with Ollama nothing leaves your computer. The PDF file itself
 is never uploaded.
 
-### Translation and summaries (Hugging Face)
+### Translation and summaries (offline)
 
 **Translate** turns selected English text into **Hindi, Marathi, Assamese, Bengali or Arabic**.
 **Summarize** is a two-step pipeline: it summarizes the English text, then translates the summary
-into the language you pick (or leaves it in English). Pick the language in the card; the app
-remembers it. Arabic is shown right-to-left.
+into the language you pick (or leave it in English). Pick the language in the card or in
+Settings → General; the app remembers it. Arabic is shown right-to-left.
 
 ```mermaid
 flowchart LR
-    S["Selected English text"] --> B["Summarization model<br/>facebook/bart-large-cnn"]
+    S["Selected English text"] --> B["Summarization model<br/>DistilBART CNN"]
     B --> E["English summary"]
-    E --> T["Translation model<br/>google/madlad400-3b-mt"]
+    E --> T["Translation model<br/>NLLB-200"]
     T --> O["Summary in Hindi, Marathi,<br/>Assamese, Bengali or Arabic"]
 ```
 
-These run on Hugging Face's servers with **your Hugging Face token** (free monthly credits):
-create one at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) (a
-*fine-grained* token with **Make calls to Inference Providers** ticked) and paste it in
-`Ctrl+,` → **Translate & summarize**. It's the same token the Hugging Face chat provider uses.
+Both models are open Hugging Face models that **run on your computer**, inside the app
+([Transformers.js](https://huggingface.co/docs/transformers.js)): **no API key**, and the text you
+select never leaves your computer. Each model downloads **once**, the first time you use it (you
+see the progress in the card), then works **offline**. Settings → **Translate & summarize** shows
+whether they're downloaded, lets you download them ahead of time, and removes them to free space.
 
-| Task | Default model | Why |
-|---|---|---|
-| Translation (all five languages) | [google/madlad400-3b-mt](https://huggingface.co/google/madlad400-3b-mt) | translates into 400+ languages, including all five; Apache-2.0 |
-| Hindi (alternative) | [Helsinki-NLP/opus-mt-en-hi](https://huggingface.co/Helsinki-NLP/opus-mt-en-hi) | small and fast, English → Hindi only |
-| Arabic (alternative) | [Helsinki-NLP/opus-mt-tc-big-en-ar](https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-en-ar) | English → Arabic only |
-| English summaries | [facebook/bart-large-cnn](https://huggingface.co/facebook/bart-large-cnn) | Hugging Face's recommended summarizer |
+| Task | Model | Download | Licence |
+|---|---|---|---|
+| Translation (all five languages) | [NLLB-200 distilled 600M](https://huggingface.co/Xenova/nllb-200-distilled-600M) (Meta) | about 0.9 GB | CC-BY-NC-4.0 (non-commercial) |
+| English summaries | [DistilBART CNN 6-6](https://huggingface.co/Xenova/distilbart-cnn-6-6) | about 0.3 GB | Apache-2.0 |
 
-You can pick a different model for each language, and for summaries. **Show all served models**
-lists the models Hugging Face is running right now. Long text is split at sentence ends:
-translation goes a few sentences at a time, and summaries are built part by part. If a model is
-asleep, the first request can take a little longer while Hugging Face loads it.
+The models run in a background worker, so the page stays smooth while they work; a paragraph takes
+a few seconds. Long text is split at sentence ends: translation goes a few sentences at a time, and
+summaries are built part by part.
 
 ## How the RAG pipeline works
 
@@ -308,7 +306,8 @@ src/
   update.ts      update check and install prompt
   ai.ts          AI features: selection actions, chat (agentic RAG over the PDF), summaries, provider dialog
   llm.ts         AI providers: Anthropic and OpenAI-compatible adapters, streaming
-  hf.ts          Hugging Face translation and summarization (summarize, then translate)
+  hf.ts          offline translation and summarization (summarize, then translate)
+  hfworker.ts    Web Worker that runs the models (Transformers.js)
   aisettings.ts  AI settings dialog (Ctrl+,): chat provider, Hugging Face models, saved keys
   styles.css     all styles and themes
 src-tauri/

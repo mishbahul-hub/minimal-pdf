@@ -1,6 +1,7 @@
 // Settings (Ctrl+,, the gear in the right-click menu and the chat, or the start screen), in tabs:
-// General (theme, translation language, version), the chat AI provider and model, the Hugging Face
-// models for translation and summaries, and the API keys saved on this computer (with Remove).
+// General (theme, pop-up style, translation language, version), the chat AI provider and model, the
+// offline translation and summary models (download / remove), and the API keys saved on this
+// computer (with Remove).
 // Keys go to Rust (Windows Credential Manager); everything else is kept in settings.json.
 import { getVersion } from "@tauri-apps/api/app";
 import { showIndicator } from "./viewer";
@@ -21,7 +22,8 @@ import {
   type AiError,
   type ProviderId,
 } from "./llm";
-import { getHfModels, LANGS, servedModels, setHfModels, SUGGESTED, translate, type HfModels, type LangId } from "./hf";
+import { downloadModel, LANGS, MODEL_INFO, modelDevice, modelStatus, removeModels } from "./hf";
+import type { Which } from "./hfworker";
 
 export type SettingsTab = "general" | "chat" | "hf" | "keys";
 
@@ -87,26 +89,20 @@ el.innerHTML = `
       </div>
     </form>
 
-    <form class="tab" data-tab="hf" hidden>
-      <p>Translation of selected English text into Hindi, Marathi, Assamese, Bengali and Arabic, and
-      English summaries, use models that Hugging Face runs for you with your Hugging Face token.</p>
-      <label>Hugging Face token <input name="hfkey" type="password" autocomplete="off" spellcheck="false" /></label>
-      <p class="hint">huggingface.co/settings/tokens → Create new token → Fine-grained → tick “Make calls to Inference Providers”.
-      The same token also works for the Hugging Face chat provider.</p>
-      <label>Summarization model (English)
-        <input name="sum" type="text" list="hf-sum" autocomplete="off" spellcheck="false" />
-      </label>
-      <datalist id="hf-sum"></datalist>
-      <fieldset>
-        <legend>Translation model for each language</legend>
-        <div class="langs"></div>
-      </fieldset>
+    <div class="tab" data-tab="hf" hidden>
+      <p>Translate (into Hindi, Marathi, Assamese, Bengali and Arabic) and Summarize run open models
+      on this computer: no key, and nothing you select leaves your computer. Each model downloads
+      once, the first time it's used (or now), then works offline.</p>
+      <p class="hint device"></p>
+      <ul class="model-list"></ul>
       <div class="row">
-        <button type="submit" class="primary">Save and test</button>
-        <button type="button" class="load-hf">Show all served models</button>
+        <button type="button" class="primary download-models">Download now</button>
+        <button type="button" class="remove-models">Remove downloaded models</button>
         <span class="status" aria-live="polite"></span>
       </div>
-    </form>
+      <progress class="model-progress" max="100" value="0" hidden></progress>
+      <p class="hint">The translation language is in General. NLLB-200 is licensed for non-commercial use.</p>
+    </div>
 
     <div class="tab" data-tab="keys" hidden>
       <p>API keys saved on this computer, in Windows Credential Manager. Removing a key turns off the
@@ -184,10 +180,9 @@ export async function withKey(fn: () => void) {
   else void openKeySetup(fn, "chat");
 }
 
-/** Run `fn` now if a Hugging Face token is saved, otherwise after the user adds one. */
-export async function withHfToken(fn: () => void) {
-  if (await hasKey("huggingface")) fn();
-  else void openKeySetup(fn, "hf");
+/** Translate / Summarize need nothing set up: the models download on first use. */
+export function withOfflineModels(fn: () => void) {
+  fn();
 }
 
 // ---------------------------------------------------------------------------
@@ -355,95 +350,94 @@ chatForm.addEventListener("submit", async (e) => {
 });
 
 // ---------------------------------------------------------------------------
-// Translate & summarize (Hugging Face)
+// Translate & summarize (offline models)
 
-const hfForm = el.querySelector<HTMLFormElement>('form[data-tab="hf"]')!;
-const hfKeyInput = hfForm.querySelector<HTMLInputElement>('[name="hfkey"]')!;
-const sumInput = hfForm.querySelector<HTMLInputElement>('[name="sum"]')!;
-const sumList = hfForm.querySelector<HTMLDataListElement>("#hf-sum")!;
-const hfStatus = hfForm.querySelector<HTMLElement>(".status")!;
-const langRows = hfForm.querySelector<HTMLElement>(".langs")!;
-const langInputs = new Map<LangId, HTMLInputElement>();
-const langLists = new Map<LangId, HTMLDataListElement>();
-for (const l of LANGS) {
-  const label = document.createElement("label");
-  label.textContent = `${l.name} `;
-  const native = document.createElement("span");
-  native.className = "native";
-  native.textContent = l.native;
-  const input = document.createElement("input");
-  input.type = "text";
-  input.name = `tr-${l.id}`;
-  input.autocomplete = "off";
-  input.spellcheck = false;
-  input.setAttribute("list", `hf-tr-${l.id}`);
-  const list = document.createElement("datalist");
-  list.id = `hf-tr-${l.id}`;
-  label.append(native, input);
-  langRows.append(label, list);
-  langInputs.set(l.id, input);
-  langLists.set(l.id, list);
-}
-
-const options = (ids: string[]) => [...new Set(ids)].map((m) => new Option(m, m));
+const hfTab = el.querySelector<HTMLElement>('.tab[data-tab="hf"]')!;
+const hfModelList = hfTab.querySelector<HTMLElement>(".model-list")!;
+const hfStatus = hfTab.querySelector<HTMLElement>(".status")!;
+const hfDevice = hfTab.querySelector<HTMLElement>(".device")!;
+const modelProgress = hfTab.querySelector<HTMLProgressElement>(".model-progress")!;
+const downloadBtn = hfTab.querySelector<HTMLButtonElement>(".download-models")!;
+const removeBtn = hfTab.querySelector<HTMLButtonElement>(".remove-models")!;
+let downloading = false;
 
 async function showHf() {
-  const m = await getHfModels();
-  const saved = await hasKey("huggingface");
-  hfKeyInput.value = "";
-  hfKeyInput.placeholder = saved ? "Saved. Paste a new token to replace it." : "hf_…";
-  sumInput.value = m.summarize;
-  sumList.replaceChildren(...options(SUGGESTED.summarize));
-  for (const l of LANGS) {
-    langInputs.get(l.id)!.value = m.translate[l.id];
-    langLists.get(l.id)!.replaceChildren(...options(SUGGESTED.translate[l.id]));
+  hfStatus.textContent = downloading ? hfStatus.textContent : "Checking…";
+  let status: Record<Which, boolean>;
+  const device = await modelDevice();
+  hfDevice.textContent = device === "gpu" ? "Runs on your graphics card (GPU): fast." : "Runs on your processor (CPU): no usable graphics card found, so it is slower.";
+  try {
+    status = await modelStatus();
+  } catch (e) {
+    hfStatus.textContent = friendly(e);
+    return;
   }
-  hfStatus.textContent = "";
-  (saved ? sumInput : hfKeyInput).focus();
+  hfModelList.replaceChildren(
+    ...(Object.keys(MODEL_INFO) as Which[]).map((which) => {
+      const m = MODEL_INFO[which];
+      const li = document.createElement("li");
+      const name = document.createElement("span");
+      name.className = "name";
+      name.textContent = `${m.use}: ${m.name}`;
+      const meta = document.createElement("span");
+      meta.className = "use";
+      meta.textContent = `${m.size[device]} · ${m.licence}`;
+      const state = document.createElement("span");
+      state.className = status[which] ? "state ok" : "state";
+      state.textContent = status[which] ? "Downloaded" : "Not downloaded";
+      li.append(name, meta, state);
+      return li;
+    }),
+  );
+  const all = Object.values(status).every(Boolean);
+  const any = Object.values(status).some(Boolean);
+  downloadBtn.disabled = all || downloading;
+  removeBtn.disabled = !any || downloading;
+  if (!downloading) hfStatus.textContent = all ? "Ready: works offline." : "";
 }
 
-hfForm.querySelector(".load-hf")!.addEventListener("click", async () => {
-  hfStatus.textContent = "Loading the models Hugging Face serves…";
+downloadBtn.addEventListener("click", async () => {
+  if (downloading) return;
+  downloading = true;
+  downloadBtn.disabled = removeBtn.disabled = true;
+  modelProgress.hidden = false;
   try {
-    const [tr, sum] = await Promise.all([servedModels("translation"), servedModels("summarization")]);
-    sumList.replaceChildren(...options([...SUGGESTED.summarize, ...sum]));
-    // Translation models that start from English (or translate between many languages).
-    const fromEnglish = tr.filter((m) => /(^|[-_/])en[-_]|madlad|nllb|m2m100|mbart|mul/i.test(m));
-    for (const l of LANGS) langLists.get(l.id)!.replaceChildren(...options([...SUGGESTED.translate[l.id], ...fromEnglish]));
-    hfStatus.textContent = `${fromEnglish.length} translation and ${sum.length} summarization models: pick in the boxes.`;
+    for (const which of Object.keys(MODEL_INFO) as Which[]) {
+      const m = MODEL_INFO[which];
+      hfStatus.textContent = `Downloading ${m.name}…`;
+      modelProgress.value = 0;
+      await downloadModel(which, (loaded, total) => {
+        if (!total) return;
+        modelProgress.value = Math.round((loaded / total) * 100);
+        hfStatus.textContent = `Downloading ${m.name}: ${Math.round(loaded / 1e6)} of ${Math.round(total / 1e6)} MB`;
+      });
+    }
+    downloading = false;
+    showIndicator("Translation and summary models are ready");
+  } catch (e) {
+    downloading = false;
+    hfStatus.textContent = friendly(e);
+  }
+  modelProgress.hidden = true;
+  await showHf();
+});
+
+removeBtn.addEventListener("click", async () => {
+  hfStatus.textContent = "Removing…";
+  try {
+    await removeModels();
+    showIndicator("Downloaded models removed");
   } catch (e) {
     hfStatus.textContent = friendly(e);
   }
-});
-
-hfForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const m: HfModels = { summarize: sumInput.value.trim(), translate: {} as Record<LangId, string> };
-  for (const l of LANGS) m.translate[l.id] = langInputs.get(l.id)!.value.trim();
-  if (!m.summarize || LANGS.some((l) => !m.translate[l.id])) {
-    hfStatus.textContent = "Choose a model in every box.";
-    return;
-  }
-  hfStatus.textContent = "Checking…";
-  try {
-    const token = hfKeyInput.value.trim();
-    if (token) await saveKey("huggingface", token);
-    else if (!(await hasKey("huggingface"))) throw new Error("Paste your Hugging Face token first.");
-    hfKeyInput.value = "";
-    await setHfModels(m);
-    const test = await translate("Hello.", "hi");
-    done(`Hugging Face connected: “Hello.” → “${test}”`);
-  } catch (err) {
-    if ((err as AiError).kind === "auth") await clearKey("huggingface");
-    hfStatus.textContent = friendly(err);
-  }
+  await showHf();
 });
 
 // ---------------------------------------------------------------------------
 // API keys
 
 const keyList = el.querySelector<HTMLElement>(".key-list")!;
-const USES: Partial<Record<ProviderId, string>> = { huggingface: "chat, translation and summaries" };
+const USES: Partial<Record<ProviderId, string>> = {};
 
 async function showKeys() {
   const rows: HTMLElement[] = [];

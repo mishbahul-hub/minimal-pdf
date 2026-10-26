@@ -1,85 +1,164 @@
 // Translation (English → Hindi, Marathi, Assamese, Bengali, Arabic) and English summarization with
-// Hugging Face models, run by Hugging Face (Inference Providers, hf-inference route) with the user's
-// token: the same one the Hugging Face chat provider uses. Rust (ai.rs, hf_task) holds the token.
+// open Hugging Face models that run on this computer (Transformers.js in hfworker.ts): no key, and
+// nothing leaves the computer. The models download once, on first use, then work offline.
 //
-// Summarize-and-translate is a two-step pipeline: summarize the English text with a summarization
-// model, then translate that summary with the language's translation model.
-import { invoke } from "@tauri-apps/api/core";
-import { getSetting, setSetting } from "./settings";
+// Summarize-and-translate is a two-step pipeline: summarize the English text with the summarization
+// model, then translate that summary with the translation model.
 import { AiError } from "./llm";
+import type { Device, Request, Response, Which } from "./hfworker";
 
 export type LangId = "hi" | "mr" | "as" | "bn" | "ar";
 
-/** Target languages, with the codes each model family uses. */
-export const LANGS: { id: LangId; name: string; native: string; iso3: string; nllb: string; rtl?: boolean }[] = [
-  { id: "hi", name: "Hindi", native: "हिन्दी", iso3: "hin", nllb: "hin_Deva" },
-  { id: "mr", name: "Marathi", native: "मराठी", iso3: "mar", nllb: "mar_Deva" },
-  { id: "as", name: "Assamese", native: "অসমীয়া", iso3: "asm", nllb: "asm_Beng" },
-  { id: "bn", name: "Bengali", native: "বাংলা", iso3: "ben", nllb: "ben_Beng" },
-  { id: "ar", name: "Arabic", native: "العربية", iso3: "ara", nllb: "arb_Arab", rtl: true },
+/** Target languages, with their NLLB-200 (FLORES-200) codes. */
+export const LANGS: { id: LangId; name: string; native: string; nllb: string; rtl?: boolean }[] = [
+  { id: "hi", name: "Hindi", native: "हिन्दी", nllb: "hin_Deva" },
+  { id: "mr", name: "Marathi", native: "मराठी", nllb: "mar_Deva" },
+  { id: "as", name: "Assamese", native: "অসমীয়া", nllb: "asm_Beng" },
+  { id: "bn", name: "Bengali", native: "বাংলা", nllb: "ben_Beng" },
+  { id: "ar", name: "Arabic", native: "العربية", nllb: "arb_Arab", rtl: true },
 ];
 
 export function langInfo(id: LangId) {
   return LANGS.find((l) => l.id === id) ?? LANGS[0];
 }
 
-// MADLAD-400 (Google, Apache-2.0) translates into 400+ languages, all five of ours included, and
-// Hugging Face serves it. Dedicated pairs exist only for Hindi and Arabic.
-const MADLAD = "google/madlad400-3b-mt";
-export const SUGGESTED: { summarize: string[]; translate: Record<LangId, string[]> } = {
-  summarize: ["facebook/bart-large-cnn", "sshleifer/distilbart-cnn-12-6", "google/pegasus-xsum"],
-  translate: {
-    hi: [MADLAD, "Helsinki-NLP/opus-mt-en-hi", "Helsinki-NLP/opus-mt-en-mul"],
-    mr: [MADLAD, "Helsinki-NLP/opus-mt-en-mul"],
-    as: [MADLAD, "Helsinki-NLP/opus-mt-en-mul"],
-    bn: [MADLAD, "Helsinki-NLP/opus-mt-en-mul"],
-    ar: [MADLAD, "Helsinki-NLP/opus-mt-tc-big-en-ar", "Helsinki-NLP/opus-mt-en-ar"],
+/** What Settings shows about each model. Download sizes differ: 4-bit/fp16 files for the GPU, 8-bit for the CPU. */
+export const MODEL_INFO: Record<Which, { name: string; id: string; size: Record<Device, string>; licence: string; use: string }> = {
+  translation: {
+    name: "NLLB-200 (600M)",
+    id: "Xenova/nllb-200-distilled-600M",
+    size: { gpu: "about 1.3 GB", cpu: "about 0.9 GB" },
+    licence: "CC-BY-NC-4.0",
+    use: "Translation",
+  },
+  summarization: {
+    name: "DistilBART CNN",
+    id: "Xenova/distilbart-cnn-6-6",
+    size: { gpu: "about 0.3 GB", cpu: "about 0.3 GB" },
+    licence: "Apache-2.0",
+    use: "English summaries",
   },
 };
 
-export type HfModels = { summarize: string; translate: Record<LangId, string> };
-const DEFAULTS: HfModels = {
-  summarize: SUGGESTED.summarize[0],
-  translate: { hi: MADLAD, mr: MADLAD, as: MADLAD, bn: MADLAD, ar: MADLAD },
-};
+let devicePromise: Promise<Device> | null = null;
 
-let models: HfModels | null = null;
-
-/** The chosen models (settings `hfModels`), filled in with the defaults. */
-export async function getHfModels(): Promise<HfModels> {
-  if (!models) {
-    const saved = await getSetting<Partial<HfModels>>("hfModels");
-    models = { summarize: saved?.summarize || DEFAULTS.summarize, translate: { ...DEFAULTS.translate, ...saved?.translate } };
-  }
-  return models;
+/** The graphics card (WebGPU) when the WebView offers one: much faster; otherwise the processor. */
+export function modelDevice(): Promise<Device> {
+  devicePromise ??= (async () => {
+    try {
+      const gpu = (navigator as Navigator & { gpu?: { requestAdapter(): Promise<unknown> } }).gpu;
+      return gpu && (await gpu.requestAdapter()) ? "gpu" : "cpu";
+    } catch {
+      return "cpu";
+    }
+  })();
+  return devicePromise;
 }
 
-export async function setHfModels(m: HfModels) {
-  models = m;
-  await setSetting("hfModels", m);
+// ---------------------------------------------------------------------------
+// The worker
+//
+// A model takes 2–4 GB of memory while loaded, and WebAssembly memory never shrinks, even after a
+// model is unloaded. So each model gets its own worker, which is ended (memory and all) when the
+// other model is needed and after a minute without use. Reloading from the disk cache takes seconds.
+
+const IDLE_MS = 60_000;
+
+/** A request without its id (added here); Omit on each member of the union. */
+type Body = Request extends infer R ? (R extends unknown ? Omit<R, "id" | "device"> : never) : never;
+
+type Pending = { resolve: (v: unknown) => void; reject: (e: Error) => void; onProgress?: (loaded: number, total: number) => void };
+let worker: Worker | null = null;
+let workerModel: Which | null = null; // the model this worker has (or will have) loaded
+let idleTimer = 0;
+let seq = 0;
+const pending = new Map<number, Pending>();
+
+/** Send a request; `model` is the model it loads (none for status / remove). */
+async function call<T>(req: Body, onProgress?: Pending["onProgress"], model?: Which): Promise<T> {
+  const device = await modelDevice();
+  clearTimeout(idleTimer);
+  if (worker && model && workerModel && workerModel !== model && !pending.size) stopWorker();
+  worker ??= startWorker();
+  if (model) workerModel = model;
+  const id = ++seq;
+  return new Promise<T>((resolve, reject) => {
+    pending.set(id, { resolve: resolve as (v: unknown) => void, reject, onProgress });
+    worker!.postMessage({ ...req, id, device } as Request);
+  });
 }
 
-/** Models Hugging Face currently serves for a task. */
-export async function servedModels(task: "translation" | "summarization"): Promise<string[]> {
-  return invoke<string[]>("hf_models", { task }).catch(rethrow);
+function stopWorker() {
+  worker?.terminate();
+  worker = null;
+  workerModel = null;
 }
 
-function rethrow(e: unknown): never {
-  const info = e as { kind?: string; message?: string };
-  throw new AiError(info?.kind ?? "api", info?.message ?? String(e));
+/** End the worker once nothing has used it for a while, giving its memory back. */
+function scheduleIdleStop() {
+  clearTimeout(idleTimer);
+  idleTimer = window.setTimeout(() => {
+    if (!pending.size) stopWorker();
+  }, IDLE_MS);
 }
 
-async function runTask(model: string, inputs: string, parameters?: Record<string, unknown>): Promise<unknown> {
-  return invoke("hf_task", { model, inputs, parameters: parameters ?? null }).catch(rethrow);
+function startWorker() {
+  const w = new Worker(new URL("./hfworker.ts", import.meta.url), { type: "module" });
+  w.onmessage = (e: MessageEvent<Response>) => {
+    const msg = e.data;
+    const p = pending.get(msg.id);
+    if (!p) return;
+    if ("progress" in msg) p.onProgress?.(msg.progress.loaded, msg.progress.total);
+    else {
+      pending.delete(msg.id);
+      if (!pending.size) scheduleIdleStop();
+      if ("error" in msg) p.reject(new AiError("api", friendlyError(msg.error)));
+      else p.resolve(msg.result);
+    }
+  };
+  w.onerror = (e) => {
+    for (const p of pending.values()) p.reject(new AiError("api", `The translation engine stopped: ${e.message}`));
+    pending.clear();
+    stopWorker();
+  };
+  return w;
 }
 
-/** The text field of an answer: [{translation_text}] / [{summary_text}] / [{generated_text}] or the object itself. */
-function answerText(res: unknown): string {
-  const first = (Array.isArray(res) ? res[0] : res) as Record<string, unknown> | undefined;
-  const text = first?.translation_text ?? first?.summary_text ?? first?.generated_text;
-  if (typeof text !== "string") throw new AiError("api", "Hugging Face returned no text.");
-  return text.trim();
+function friendlyError(message: string) {
+  if (/fetch|network|Failed to load|ERR_/i.test(message))
+    return "Couldn't download the model. Check your internet connection: it's needed once, the first time.";
+  return message;
 }
+
+const mb = (bytes: number) => `${Math.round(bytes / 1e6)} MB`;
+
+/** Progress text for a model download (shown only while one happens). */
+function downloadStep(which: Which, onStep?: Progress) {
+  return (loaded: number, total: number) => {
+    if (!onStep || !total) return;
+    const pct = Math.min(100, Math.round((loaded / total) * 100));
+    onStep(`Downloading the ${MODEL_INFO[which].use.toLowerCase()} model (one time): ${pct}% · ${mb(loaded)} of ${mb(total)}`);
+  };
+}
+
+/** Which models are already on this computer. */
+export function modelStatus(): Promise<Record<Which, boolean>> {
+  return call({ task: "status" });
+}
+
+/** Download a model now (otherwise it downloads on first use). */
+export function downloadModel(which: Which, onProgress?: (loaded: number, total: number) => void): Promise<void> {
+  return call({ task: "download", which }, onProgress, which);
+}
+
+/** Delete the downloaded models (they download again on next use). */
+export async function removeModels(): Promise<void> {
+  if (!pending.size) stopWorker(); // a loaded model can't be deleted from under a running worker
+  return call({ task: "remove" });
+}
+
+// ---------------------------------------------------------------------------
+// Translate and summarize
 
 /** Split text into pieces of at most `max` characters, at sentence ends where possible. */
 export function chunks(text: string, max: number): string[] {
@@ -106,44 +185,36 @@ export function chunks(text: string, max: number): string[] {
   return out;
 }
 
-/** How a model is told the target language. */
-function translationRequest(model: string, text: string, lang: LangId): { inputs: string; parameters?: Record<string, unknown> } {
-  const l = langInfo(lang);
-  if (/madlad400/i.test(model)) return { inputs: `<2${l.id}> ${text}` };
-  // Multi-target Marian models pick the language from a >>xxx<< prefix.
-  if (/opus-mt-(tc-[a-z]+-)?en-(mul|dra|inc)\b/i.test(model)) return { inputs: `>>${l.iso3}<< ${text}` };
-  if (/nllb/i.test(model)) return { inputs: text, parameters: { src_lang: "eng_Latn", tgt_lang: l.nllb } };
-  if (/m2m100/i.test(model)) return { inputs: text, parameters: { src_lang: "en", tgt_lang: l.id } };
-  return { inputs: text }; // a model for this one language pair
-}
-
-const TRANSLATE_CHUNK = 400; // characters per request: translation models handle a few sentences at a time
-const SUMMARY_CHUNK = 3000; // BART reads about 1,000 tokens
+const TRANSLATE_CHUNK = 400; // characters per request: NLLB handles a few sentences at a time
+const SUMMARY_CHUNK = 3000; // DistilBART reads about 1,000 tokens
 export const MIN_SUMMARY_CHARS = 250; // shorter text is already a summary
 
 export type Progress = (step: string) => void;
 
 /** Translate English text into `lang`, piece by piece. */
 export async function translate(text: string, lang: LangId, onStep?: Progress): Promise<string> {
-  const model = (await getHfModels()).translate[lang];
+  const l = langInfo(lang);
   const pieces = chunks(text, TRANSLATE_CHUNK);
-  onStep?.(`Translating into ${langInfo(lang).name} with ${model}${pieces.length > 1 ? ` (${pieces.length} parts)` : ""}…`);
   const out: string[] = [];
-  for (const piece of pieces) {
-    const req = translationRequest(model, piece, lang);
-    out.push(answerText(await runTask(model, req.inputs, req.parameters)));
+  for (const [i, piece] of pieces.entries()) {
+    onStep?.(`Translating into ${l.name}${pieces.length > 1 ? ` (part ${i + 1} of ${pieces.length})` : ""}…`);
+    out.push((await call<string>({ task: "translate", text: piece, tgt: l.nllb }, downloadStep("translation", onStep), "translation")).trim());
   }
   return out.join(" ");
 }
 
 /** Summarize English text. Long text is summarized in parts, and the parts once more if still long. */
 export async function summarize(text: string, onStep?: Progress): Promise<string> {
-  const model = (await getHfModels()).summarize;
   const pieces = chunks(text, SUMMARY_CHUNK);
-  onStep?.(`Summarizing with ${model}${pieces.length > 1 ? ` (${pieces.length} parts)` : ""}…`);
   const parts: string[] = [];
-  for (const piece of pieces) parts.push(answerText(await runTask(model, piece)));
+  for (const [i, piece] of pieces.entries()) {
+    onStep?.(`Summarizing${pieces.length > 1 ? ` (part ${i + 1} of ${pieces.length})` : ""}…`);
+    parts.push((await call<string>({ task: "summarize", text: piece }, downloadStep("summarization", onStep), "summarization")).trim());
+  }
   let summary = parts.join(" ");
-  if (parts.length > 1 && summary.length > SUMMARY_CHUNK) summary = answerText(await runTask(model, summary.slice(0, SUMMARY_CHUNK * 1.3)));
+  if (parts.length > 1 && summary.length > SUMMARY_CHUNK) {
+    onStep?.("Combining the parts…");
+    summary = (await call<string>({ task: "summarize", text: summary.slice(0, SUMMARY_CHUNK * 1.3) }, undefined, "summarization")).trim();
+  }
   return summary;
 }

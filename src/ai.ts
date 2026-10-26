@@ -10,7 +10,7 @@ import { getOutlineItems, sectionAt } from "./outline";
 import { addComment, annotationList, getDocData, setDocData } from "./annotate";
 import { getSetting, setSetting } from "./settings";
 import { AiError, aiEvents, callModel, cancel, friendly, getAiConfig, providerInfo, textOf, type Block, type Message, type Run, type Tool } from "./llm";
-import { openKeySetup, withHfToken, withKey } from "./aisettings";
+import { openKeySetup, withKey, withOfflineModels } from "./aisettings";
 import { LANGS, langInfo, MIN_SUMMARY_CHARS, summarize, translate, type LangId } from "./hf";
 
 export { openKeySetup };
@@ -216,7 +216,8 @@ let card: Card | null = null;
 
 export function askAboutSelection(action: QuickAction, sel: Selected) {
   const show = () => void showCard(action, sel);
-  void (HF_ACTIONS.includes(action) ? withHfToken(show) : withKey(show));
+  if (HF_ACTIONS.includes(action)) withOfflineModels(show);
+  else void withKey(show);
 }
 
 async function showCard(action: QuickAction, sel: Selected) {
