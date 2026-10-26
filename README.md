@@ -133,11 +133,13 @@ whether they're downloaded, lets you download them ahead of time, and removes th
 
 | Task | Model | Download | Licence |
 |---|---|---|---|
-| Translation (all five languages) | [NLLB-200 distilled 600M](https://huggingface.co/Xenova/nllb-200-distilled-600M) (Meta) | about 0.9 GB | CC-BY-NC-4.0 (non-commercial) |
+| Translation (all five languages) | [NLLB-200 distilled 600M](https://huggingface.co/Xenova/nllb-200-distilled-600M) (Meta) | about 1.3 GB (GPU) / 0.9 GB (CPU) | CC-BY-NC-4.0 (non-commercial) |
 | English summaries | [DistilBART CNN 6-6](https://huggingface.co/Xenova/distilbart-cnn-6-6) | about 0.3 GB | Apache-2.0 |
 
-The models run in a background worker, so the page stays smooth while they work; a paragraph takes
-a few seconds. Long text is split at sentence ends: translation goes a few sentences at a time, and
+The models run in a background worker, so the page stays smooth while they work. They use your
+**graphics card** (WebGPU) when it has one, which is fast (2–3 seconds per sentence), and otherwise
+your **processor**. Each model is unloaded after a minute of no use, so it doesn't hold memory while
+you read. Long text is split at sentence ends: translation goes a few sentences at a time, and
 summaries are built part by part.
 
 ## How the RAG pipeline works
