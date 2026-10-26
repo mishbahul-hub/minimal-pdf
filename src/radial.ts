@@ -129,11 +129,16 @@ function build() {
 }
 
 // Hovering a tool previews its options; leaving the menu goes back to the selected tool's.
+// The save choices stay put (the pointer crosses the tool ring and gaps on the way up to them)
+// until one is picked, a tool is clicked, or the menu closes.
 menu.addEventListener("pointerover", (e) => {
+  if (savePinned) return;
   const t = (e.target as Element).closest<HTMLElement>(".tool");
   if (t) showOptions(t.dataset.tool as Slot);
 });
-menu.addEventListener("pointerleave", () => showOptions(selected));
+menu.addEventListener("pointerleave", () => {
+  if (!savePinned) showOptions(selected);
+});
 
 /** Mark the active tool and show the current colour in the middle. */
 function refresh() {
@@ -148,6 +153,7 @@ function refresh() {
 }
 
 let shownFor: Slot | null = null;
+let savePinned = false; // the outer ring shows the save choices
 
 /**
  * Outer ring: the tool's colours, a custom-colour picker, and its size presets.
@@ -156,6 +162,7 @@ let shownFor: Slot | null = null;
 function showOptions(t: Slot, force = false) {
   if (t === shownFor && !force) return;
   shownFor = t;
+  savePinned = false;
   menu.querySelectorAll(".opt").forEach((el) => el.remove());
   if (t === "ai") return showAiOptions();
   const def = TOOLS.find((x) => x.id === t)!;
@@ -259,6 +266,7 @@ function showAiOptions() {
 /** Outer ring after the save button: the two ways to save. */
 function showSaveOptions() {
   shownFor = null;
+  savePinned = true;
   menu.querySelectorAll(".opt").forEach((el) => el.remove());
   const choices: [string, string, () => void][] = [
     ["Save with annotations", "A new PDF with your highlights, drawings and comments drawn in (Ctrl+S)", () => void savePdf("annotated")],
