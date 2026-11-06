@@ -142,6 +142,33 @@ your **processor**. Each model is unloaded after a minute of no use, so it doesn
 you read. Long text is split at sentence ends: translation goes a few sentences at a time, and
 summaries are built part by part.
 
+#### Translation quality
+
+Measured on the standard [FLORES-101](https://huggingface.co/datasets/gsarti/flores_101) benchmark
+(the first 100 *devtest* sentences of each language, English → target), with the app's own
+Translate: the same model, settings and graphics-card engine you get.
+
+| Language | BLEU | chrF |
+|---|---:|---:|
+| Hindi | 29.0 | 52.9 |
+| Arabic | 18.8 | 50.3 |
+| Bengali | 10.3 | 42.4 |
+| Marathi | 9.3 | 40.0 |
+| Assamese | 4.5 | 32.6 |
+
+- **BLEU** (0–100) counts matching words and word sequences against a human translation; **chrF**
+  (0–100) counts matching character sequences, which suits Indian languages better because one
+  word can take many forms. Higher is better; human translations of the same text usually differ
+  enough that even good translations score well below 100.
+- What the numbers mean in practice: Hindi and Arabic translations are usually good; Bengali and
+  Marathi get the meaning across with some awkward wording; Assamese, which has much less training
+  data, is the weakest and best treated as a rough guide.
+- The app decodes greedily (one candidate at a time) to save memory, so a sentence occasionally
+  ends with a repeated word.
+- Reproduce with `node tools/eval/run-flores.mjs` while the app runs with remote debugging; the
+  translations and scores are in [tools/eval/results](tools/eval/results). Scores are computed like
+  [sacreBLEU](https://github.com/mjpost/sacrebleu)'s defaults (BLEU with 13a tokenization, chrF2).
+
 ## How the RAG pipeline works
 
 RAG (*retrieval-augmented generation*) means the AI answers from passages **retrieved from your
@@ -310,6 +337,7 @@ src/
   llm.ts         AI providers: Anthropic and OpenAI-compatible adapters, streaming
   hf.ts          offline translation and summarization (summarize, then translate)
   hfworker.ts    Web Worker that runs the models (Transformers.js)
+tools/eval/      translation-quality evaluation (FLORES-101, BLEU and chrF) and its results
   aisettings.ts  AI settings dialog (Ctrl+,): chat provider, Hugging Face models, saved keys
   styles.css     all styles and themes
 src-tauri/
