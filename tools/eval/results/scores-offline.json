@@ -1,0 +1,28 @@
+{
+ "dataset": "FLORES-101 devtest (first 100 sentences)",
+ "sentences": 100,
+ "engine": "offline: Xenova/nllb-200-distilled-600M, q4f16 on WebGPU, greedy decoding",
+ "device": "gpu",
+ "scores": {
+  "hi": {
+   "bleu": 29,
+   "chrf": 52.9
+  },
+  "mr": {
+   "bleu": 9.3,
+   "chrf": 40
+  },
+  "as": {
+   "bleu": 4.5,
+   "chrf": 32.6
+  },
+  "bn": {
+   "bleu": 10.3,
+   "chrf": 42.4
+  },
+  "ar": {
+   "bleu": 18.8,
+   "chrf": 50.3
+  }
+ }
+}
