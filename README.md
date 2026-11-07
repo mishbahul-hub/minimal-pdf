@@ -10,9 +10,12 @@ Built with [Tauri 2](https://tauri.app) and [PDF.js](https://mozilla.github.io/p
 installer is about 3 MB and the installed app about 8.5 MB, because it uses the WebView2 runtime
 that ships with Windows.
 
+![Minimal PDF with highlights, a circled term and a handwritten-style comment on the page](docs/screenshots/03-annotations.webp)
+
 ## Contents
 
 - [Highlights](#highlights)
+- [Screenshots](#screenshots)
 - [Installation](#installation)
 - [Using Minimal PDF](#using-minimal-pdf)
   - [Reading and navigation](#reading-and-navigation)
@@ -44,6 +47,22 @@ that ships with Windows.
 | **AI assistant (optional)** | Explain, simplify or define selected text; chat with the whole PDF with page citations; summaries. Works with free keys (Gemini, Groq, Hugging Face, OpenRouter), offline with Ollama, or with Claude. |
 | **Offline translation** | English → Hindi, Marathi, Assamese, Bengali or Arabic, and summarize-then-translate, on your own computer with no key. |
 | **Your files stay yours** | PDFs are never changed unless you explicitly choose **Replace original**. |
+
+## Screenshots
+
+| | |
+|---|---|
+| ![The page is the whole interface: no toolbar](docs/screenshots/01-reading.webp) | ![Right-click radial menu with the highlighter's colours](docs/screenshots/02-radial.webp) |
+| **Just the page.** No toolbar; everything opens on demand. | **Right-click menu.** Tools on the inner ring, colours and sizes on the outer ring. |
+| ![AI actions on selected text](docs/screenshots/04-ask-ai.webp) | ![Offline translation into Hindi](docs/screenshots/05-translate.webp) |
+| **Selected text.** Explain, Simplify, Define, Translate, Summarize or Ask. | **Offline translation.** English → Hindi on this computer, no key. |
+| ![Chat with the PDF, with page citations](docs/screenshots/06-chat.webp) | ![Search in the dark theme](docs/screenshots/07-search-dark.webp) |
+| **Chat with the PDF.** The AI searches and reads pages, and cites them. | **Search** (`/`) in the dark theme. |
+| ![Table of contents in the sepia theme](docs/screenshots/08-contents-sepia.webp) | ![Settings with the liquid-glass pop-up style](docs/screenshots/09-settings.webp) |
+| **Contents** (`t`) in the sepia theme. | **Settings** (`Ctrl+,`) with the liquid-glass style. |
+
+<sub>The document in the screenshots is the NIST *AI Risk Management Framework* (NIST AI 100-1), a
+public-domain US government publication.</sub>
 
 ## Installation
 
@@ -379,6 +398,7 @@ src-tauri/
   src/ai.rs      AI proxy: per-provider keys in the OS credential store, streaming
   tauri.conf.json, capabilities/default.json
 tools/eval/      translation-quality evaluation (FLORES-101, BLEU and chrF) and its results
+docs/screenshots/ the screenshots in this README
 ```
 
 [CLAUDE.md](CLAUDE.md) holds the detailed design notes and conventions.
