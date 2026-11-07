@@ -1,6 +1,6 @@
 [package]
 name = "minimal-pdf"
-version = "0.2.0"
+version = "0.2.1"
 description = "Minimalist keyboard-first PDF reader"
 authors = ["islam"]
 edition = "2024"
