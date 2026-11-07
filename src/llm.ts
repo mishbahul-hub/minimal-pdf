@@ -323,7 +323,13 @@ function toOpenAI(system: Block[], messages: Message[]) {
     } else if (m.role === "assistant") {
       const calls = m.content
         .filter((b) => b.type === "tool_use")
-        .map((b) => ({ id: b.id, type: "function", function: { name: b.name, arguments: JSON.stringify(b.input ?? {}) } }));
+        .map((b) => ({
+          id: b.id,
+          type: "function",
+          function: { name: b.name, arguments: JSON.stringify(b.input ?? {}) },
+          // Gemini 3 signs its tool calls (extra_content.google.thought_signature) and rejects the next request without it.
+          ...(b.extra_content ? { extra_content: b.extra_content } : {}),
+        }));
       out.push({ role: "assistant", content: textOf(m.content) || (calls.length ? null : ""), ...(calls.length ? { tool_calls: calls } : {}) });
     } else {
       for (const b of m.content) {
@@ -351,7 +357,7 @@ function stripThink(s: string) {
 
 async function callOpenAI(c: AiConfig, req: ModelRequest, run: Run, on: Handlers): Promise<Reply> {
   let raw = "";
-  const calls: { id: string; name: string; args: string }[] = [];
+  const calls: { id: string; name: string; args: string; extra?: Record<string, unknown> }[] = [];
   let finish: string | null = null;
   let streamError: AiError | null = null;
   const body = {
@@ -385,6 +391,7 @@ async function callOpenAI(c: AiConfig, req: ModelRequest, run: Run, on: Handlers
       if (tc.id) slot.id = tc.id;
       if (tc.function?.name && !slot.name) slot.name = tc.function.name;
       if (typeof tc.function?.arguments === "string") slot.args += tc.function.arguments;
+      if (tc.extra_content && typeof tc.extra_content === "object") slot.extra = { ...slot.extra, ...tc.extra_content };
     }
     if (choice.finish_reason) finish = choice.finish_reason;
   });
@@ -394,7 +401,7 @@ async function callOpenAI(c: AiConfig, req: ModelRequest, run: Run, on: Handlers
   const text = stripThink(raw).trim();
   if (text) content.push({ type: "text", text });
   for (const call of calls.filter(Boolean)) {
-    const block: Block = { type: "tool_use", id: call.id, name: call.name };
+    const block: Block = { type: "tool_use", id: call.id, name: call.name, ...(call.extra ? { extra_content: call.extra } : {}) };
     block.input = parseInput(call.args, block);
     content.push(block);
   }
