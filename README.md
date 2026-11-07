@@ -1,6 +1,31 @@
-# Minimal PDF
+<h1 align="center">
+  <img src="src-tauri/icons/128x128@2x.png" alt="" width="84" align="center">&nbsp;Minimal PDF
+</h1>
 
-**A fast, keyboard-first PDF reader for Windows where the page is the whole interface.**
+<hr>
+
+<p align="center">
+  <a href="https://github.com/mishbahul-hub/minimal-pdf/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/mishbahul-hub/minimal-pdf?style=for-the-badge&label=Release&color=2E7D32"></a>
+  <img alt="Platform: Windows" src="https://img.shields.io/badge/Platform-Windows-0078D6?style=for-the-badge">
+  <img alt="Tauri 2" src="https://img.shields.io/badge/Tauri-2-24C8DB?style=for-the-badge&logo=tauri&logoColor=white">
+  <img alt="Rust" src="https://img.shields.io/badge/Backend-Rust-B7410E?style=for-the-badge&logo=rust&logoColor=white">
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-6.0-3178C6?style=for-the-badge&logo=typescript&logoColor=white">
+  <br>
+  <img alt="PDF.js 6" src="https://img.shields.io/badge/PDF%20engine-PDF.js%206-E3412F?style=for-the-badge&logo=mozilla&logoColor=white">
+  <img alt="Vite 8" src="https://img.shields.io/badge/Bundler-Vite%208-646CFF?style=for-the-badge&logo=vite&logoColor=white">
+  <img alt="AI: any provider" src="https://img.shields.io/badge/AI-Any%20provider-D97757?style=for-the-badge&logo=anthropic&logoColor=white">
+  <img alt="Installer about 3 MB" src="https://img.shields.io/badge/Installer-~3%20MB-6A1B9A?style=for-the-badge">
+</p>
+
+<p align="center">
+  <a href="#installation">Download</a> ·
+  <a href="#screenshots">Screenshots</a> ·
+  <a href="#ai-assistant">AI assistant</a> ·
+  <a href="#keyboard-shortcuts">Shortcuts</a> ·
+  <a href="#development">Development</a>
+</p>
+
+<p align="center"><i>A fast, keyboard-first PDF reader for Windows where the page is the whole interface.</i></p>
 
 There is no toolbar: every control appears only when you ask for it and disappears with `Esc`.
 Annotations live in a right-click radial menu, and an optional AI assistant can explain, translate,
