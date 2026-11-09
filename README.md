@@ -382,6 +382,9 @@ streaming in [src-tauri/src/ai.rs](src-tauri/src/ai.rs).
 | `?` | Show all shortcuts |
 | `Esc` | Close whatever is open / put the tool down / leave fullscreen |
 
+Shortcuts are paused while you type in a box (search, go to page, chat, a comment), so letters
+you type there never trigger them.
+
 ## Where your data lives
 
 Everything the app saves is in `%APPDATA%\com.islam.minimalpdf\`:
