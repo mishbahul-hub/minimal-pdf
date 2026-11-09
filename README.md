@@ -58,6 +58,7 @@ that ships with Windows.
 - [How the RAG pipeline works](#how-the-rag-pipeline-works)
 - [Keyboard shortcuts](#keyboard-shortcuts)
 - [Where your data lives](#where-your-data-lives)
+- [Troubleshooting](#troubleshooting)
 - [Development](#development)
 - [Appendix: using Claude Code effectively](#appendix-using-claude-code-effectively)
 - [License](#license)
@@ -399,6 +400,18 @@ Everything the app saves is in `%APPDATA%\com.islam.minimalpdf\`:
   `%LOCALAPPDATA%\com.islam.minimalpdf\`. Remove them from Settings → **Translate & summarize**.
 - Your PDF files are only ever read. The one exception is **Replace original**, which writes your
   annotations into the file after you confirm.
+
+## Troubleshooting
+
+| Problem | What to do |
+|---|---|
+| "Windows protected your PC" when installing | The installer isn't code-signed yet: choose **More info → Run anyway**. |
+| "No searchable text in this PDF" | The PDF is scanned images with no text layer, so search and the AI have nothing to read. |
+| "Too many requests" from the AI | Free tiers limit requests per minute: wait a minute and ask again. |
+| "*Provider* is busy right now" | The provider's servers are overloaded: try again shortly, or pick another model in Settings → **Chat AI** (**Load models**). |
+| The AI says a model isn't available | Model names change: open Settings → **Chat AI**, press **Load models** and choose a current one. |
+| Translate or Summarize can't download the model | The first use needs an internet connection (about 1.2 GB in all); after that they work offline. |
+| A password-protected PDF won't open | The app shows a clear message; open it in another reader to remove the password, then try again. |
 
 ## Development
 
