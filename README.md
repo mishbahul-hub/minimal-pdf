@@ -97,6 +97,13 @@ public-domain US government publication.</sub>
 2. Windows may show a SmartScreen warning ("unknown publisher") because the installer is not
    code-signed yet. Choose **More info → Run anyway**.
 
+| Requirement | |
+|---|---|
+| **Windows** | 10 or 11, 64-bit (x64) |
+| **Disk** | about 10 MB for the app; about 1.2 GB more if you use offline Translate and Summarize |
+| **Graphics card** | optional: offline models use it when available (WebGPU), otherwise the processor |
+| **Internet** | only for AI chat, the one-time model download, and update checks |
+
 Windows 10 and 11 already include WebView2, which the app uses to draw its window. After installing,
 PDFs get an **Open with Minimal PDF** option, double-clicking a PDF opens it, and a second PDF opens
 in the window that is already running.
