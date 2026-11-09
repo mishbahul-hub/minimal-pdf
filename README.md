@@ -113,6 +113,10 @@ in the window that is already running.
 
 To build the installers yourself, see [Development](#development).
 
+**Uninstalling.** Use Windows **Settings → Apps → Installed apps → Minimal PDF → Uninstall**. Your
+annotations and settings stay in `%APPDATA%\com.islam.minimalpdf\` in case you reinstall; delete that
+folder to remove them too (see [Where your data lives](#where-your-data-lives)).
+
 ## Using Minimal PDF
 
 ### Reading and navigation
