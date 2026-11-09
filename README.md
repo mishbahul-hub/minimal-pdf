@@ -62,6 +62,7 @@ that ships with Windows.
 - [Development](#development)
 - [Roadmap](#roadmap)
 - [Contributing](#contributing)
+- [Changelog](#changelog)
 - [Appendix: using Claude Code effectively](#appendix-using-claude-code-effectively)
 - [License](#license)
 
@@ -497,6 +498,17 @@ helps if the problem is specific to one file.
 Pull requests: keep the design rules in [CLAUDE.md](CLAUDE.md) (no toolbar, keyboard first, no
 frontend framework, ask before adding dependencies), run `npx tsc --noEmit`, and try the change in the
 running app.
+
+## Changelog
+
+**0.2.1**
+- Fixed chat with the newer Gemini models, which stopped after the first search ("missing a
+  thought_signature").
+
+**0.2.0**
+- First public release: fast reading, search, contents, themes, annotations with the radial menu,
+  saving with annotations, AI chat and selection actions with any provider, offline translation and
+  summaries, and automatic updates.
 
 ---
 
