@@ -60,6 +60,7 @@ that ships with Windows.
 - [Where your data lives](#where-your-data-lives)
 - [Troubleshooting](#troubleshooting)
 - [Development](#development)
+- [Roadmap](#roadmap)
 - [Appendix: using Claude Code effectively](#appendix-using-claude-code-effectively)
 - [License](#license)
 
@@ -474,6 +475,17 @@ installed apps cannot verify future updates.
 `tools/eval/run-flores.mjs` translates FLORES-101 sentences with the running app and scores them with
 `tools/eval/metrics.mjs` (BLEU and chrF). See [Translation quality](#translation-quality) for the
 current results and how to rerun them.
+
+## Roadmap
+
+Ideas for future versions (not promises):
+
+- A password prompt for protected PDFs
+- `Ctrl+P` to switch quickly between recent files
+- Two-page spread for books
+- Vim-style marks to jump between saved places
+- Reloading automatically when the PDF changes on disk
+- An option to run Translate and Summarize with the chat AI instead of the offline models
 
 ---
 
