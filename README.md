@@ -221,6 +221,8 @@ Ollama the app sends fewer pages per request. If you see "too many requests", wa
 - Your question, the selected text and the pages the AI reads go to the provider you chose. With
   Ollama, nothing leaves your computer.
 - The PDF file itself is never uploaded.
+- **Translate** and **Summarize** run on your computer: the text you select for them is never sent
+  anywhere.
 - Keys are kept in **Windows Credential Manager**, never in the app's files. The provider, model,
   address and model choices are kept in `settings.json`.
 
