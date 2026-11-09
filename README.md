@@ -64,6 +64,7 @@ that ships with Windows.
 - [Contributing](#contributing)
 - [Changelog](#changelog)
 - [Appendix: using Claude Code effectively](#appendix-using-claude-code-effectively)
+- [Acknowledgements](#acknowledgements)
 - [License](#license)
 
 ## Highlights
@@ -612,6 +613,16 @@ Claude Code is not only for writing code. Use it to learn:
 | All commands | `/help` |
 
 ---
+
+## Acknowledgements
+
+Minimal PDF is built on [Tauri](https://tauri.app), [PDF.js](https://mozilla.github.io/pdf.js/),
+[pdf-lib](https://pdf-lib.js.org) and [Transformers.js](https://huggingface.co/docs/transformers.js),
+with Meta's [NLLB-200](https://huggingface.co/facebook/nllb-200-distilled-600M) and
+[DistilBART](https://huggingface.co/sshleifer/distilbart-cnn-6-6) models (ONNX conversions by
+[Xenova](https://huggingface.co/Xenova)). Translation quality is measured on
+[FLORES-101](https://github.com/facebookresearch/flores), and badges come from
+[shields.io](https://shields.io).
 
 ## License
 
