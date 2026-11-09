@@ -6,6 +6,7 @@
 
 <p align="center">
   <a href="https://github.com/mishbahul-hub/minimal-pdf/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/mishbahul-hub/minimal-pdf?style=for-the-badge&label=Release&color=2E7D32"></a>
+  <a href="https://github.com/mishbahul-hub/minimal-pdf/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/mishbahul-hub/minimal-pdf/total?style=for-the-badge&label=Downloads&color=455A64"></a>
   <img alt="Platform: Windows" src="https://img.shields.io/badge/Platform-Windows-0078D6?style=for-the-badge">
   <img alt="Tauri 2" src="https://img.shields.io/badge/Tauri-2-24C8DB?style=for-the-badge&logo=tauri&logoColor=white">
   <img alt="Rust" src="https://img.shields.io/badge/Backend-Rust-B7410E?style=for-the-badge&logo=rust&logoColor=white">
