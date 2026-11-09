@@ -61,6 +61,7 @@ that ships with Windows.
 - [Troubleshooting](#troubleshooting)
 - [Development](#development)
 - [Roadmap](#roadmap)
+- [Contributing](#contributing)
 - [Appendix: using Claude Code effectively](#appendix-using-claude-code-effectively)
 - [License](#license)
 
@@ -486,6 +487,16 @@ Ideas for future versions (not promises):
 - Vim-style marks to jump between saved places
 - Reloading automatically when the PDF changes on disk
 - An option to run Translate and Summarize with the chat AI instead of the offline models
+
+## Contributing
+
+Bug reports and ideas are welcome in [Issues](https://github.com/mishbahul-hub/minimal-pdf/issues).
+Please include the app version (Settings → General), what you did, and what happened; a sample PDF
+helps if the problem is specific to one file.
+
+Pull requests: keep the design rules in [CLAUDE.md](CLAUDE.md) (no toolbar, keyboard first, no
+frontend framework, ask before adding dependencies), run `npx tsc --noEmit`, and try the change in the
+running app.
 
 ---
 
