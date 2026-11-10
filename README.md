@@ -60,6 +60,7 @@ that ships with Windows.
 - [Keyboard shortcuts](#keyboard-shortcuts)
 - [Where your data lives](#where-your-data-lives)
 - [Troubleshooting](#troubleshooting)
+- [FAQ](#faq)
 - [Development](#development)
 - [Roadmap](#roadmap)
 - [Contributing](#contributing)
@@ -436,6 +437,24 @@ Everything the app saves is in `%APPDATA%\com.islam.minimalpdf\`:
 | The AI says a model isn't available | Model names change: open Settings → **Chat AI**, press **Load models** and choose a current one. |
 | Translate or Summarize can't download the model | The first use needs an internet connection (about 1.2 GB in all); after that they work offline. |
 | A password-protected PDF won't open | The app shows a clear message; open it in another reader to remove the password, then try again. |
+
+## FAQ
+
+**Is it free?** Yes. The AI features can cost money only if you choose a paid provider such as
+Claude; Gemini, Groq, Hugging Face and OpenRouter have free tiers, and Ollama and the offline models
+are free.
+
+**Do I need the AI?** No. Everything except the chat and the Explain / Simplify / Define actions
+works without any key.
+
+**Does it work offline?** Reading, search, annotations, saving, and (after the one-time download)
+Translate and Summarize all work offline. The chat works offline with Ollama.
+
+**Does it run on macOS or Linux?** Not yet: releases are Windows-only. The app is built with Tauri,
+so other platforms are possible later.
+
+**Will it change my PDF?** Only if you choose **Replace original** and confirm. Annotations are
+otherwise kept separately and can be saved into a new PDF.
 
 ## Development
 
