@@ -97,8 +97,9 @@ public-domain US government publication.</sub>
 
 ## Installation
 
-1. Download `Minimal PDF_<version>_x64-setup.exe` from the
-   [Releases](https://github.com/mishbahul-hub/minimal-pdf/releases) page and run it.
+1. Download `Minimal.PDF_<version>_x64-setup.exe` from the
+   [latest release](https://github.com/mishbahul-hub/minimal-pdf/releases/latest) and run it. An `.msi`
+   installer is there too, for installing with company tools.
 2. Windows may show a SmartScreen warning ("unknown publisher") because the installer is not
    code-signed yet. Choose **More info → Run anyway**.
 
