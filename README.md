@@ -43,6 +43,7 @@ that ships with Windows.
 - [Highlights](#highlights)
 - [Screenshots](#screenshots)
 - [Installation](#installation)
+- [Quick start](#quick-start)
 - [Using Minimal PDF](#using-minimal-pdf)
   - [Reading and navigation](#reading-and-navigation)
   - [Annotations](#annotations)
@@ -122,6 +123,14 @@ To build the installers yourself, see [Development](#development).
 **Uninstalling.** Use Windows **Settings → Apps → Installed apps → Minimal PDF → Uninstall**. Your
 annotations and settings stay in `%APPDATA%\com.islam.minimalpdf\` in case you reinstall; delete that
 folder to remove them too (see [Where your data lives](#where-your-data-lives)).
+
+## Quick start
+
+1. Press `Ctrl+O` and pick a PDF (or double-click one in File Explorer).
+2. Scroll with the mouse, `Space` or `j` / `k`; jump pages with `n` / `p`.
+3. Right-click the page for highlighters, pens and comments.
+4. Select some text and right-click it to explain or translate it.
+5. Press `c` to ask the AI about the whole document, and `?` to see every shortcut.
 
 ## Using Minimal PDF
 
