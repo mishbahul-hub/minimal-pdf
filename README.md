@@ -64,6 +64,7 @@ that ships with Windows.
 - [Development](#development)
 - [Roadmap](#roadmap)
 - [Contributing](#contributing)
+- [Security](#security)
 - [Changelog](#changelog)
 - [Appendix: using Claude Code effectively](#appendix-using-claude-code-effectively)
 - [Acknowledgements](#acknowledgements)
@@ -558,6 +559,16 @@ helps if the problem is specific to one file.
 Pull requests: keep the design rules in [CLAUDE.md](CLAUDE.md) (no toolbar, keyboard first, no
 frontend framework, ask before adding dependencies), run `npx tsc --noEmit`, and try the change in the
 running app.
+
+## Security
+
+Please report security problems privately through GitHub's
+[private vulnerability reporting](https://github.com/mishbahul-hub/minimal-pdf/security/advisories/new)
+rather than in a public issue. How the app protects you:
+
+- API keys stay in Windows Credential Manager and are never given back to the app's web page.
+- Each key is only sent to the address it was saved with.
+- Updates are signed, and the app refuses an update whose signature doesn't match.
 
 ## Changelog
 
