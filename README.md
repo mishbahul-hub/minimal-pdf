@@ -247,6 +247,14 @@ Ollama the app sends fewer pages per request. If you see "too many requests", wa
 into the language you pick (or leaves it in English). Choose the language in the answer card or in
 Settings → General; the app remembers it. Arabic is shown right-to-left.
 
+| Language | Script |
+|---|---|
+| Hindi · हिन्दी | Devanagari |
+| Marathi · मराठी | Devanagari |
+| Assamese · অসমীয়া | Bengali–Assamese |
+| Bengali · বাংলা | Bengali–Assamese |
+| Arabic · العربية | Arabic (right-to-left) |
+
 ```mermaid
 flowchart LR
     S["Selected English text"] --> B["Summarization model<br/>DistilBART CNN"]
