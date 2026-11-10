@@ -527,6 +527,17 @@ installed apps cannot verify future updates.
 `tools/eval/metrics.mjs` (BLEU and chrF). See [Translation quality](#translation-quality) for the
 current results and how to rerun them.
 
+### Manual test checklist
+
+Before a release, try the app with:
+
+- a 500+ page book: smooth scrolling and steady memory;
+- a scanned, image-only PDF: "No searchable text" message;
+- PDFs with and without bookmarks: contents sidebar and its page-list fallback;
+- a password-protected PDF: a clear message;
+- mixed page sizes (A4 and landscape): fit width and restoring the position;
+- a corrupt or renamed file: an error message, no crash.
+
 ## Roadmap
 
 Ideas for future versions (not promises):
