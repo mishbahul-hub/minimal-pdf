@@ -468,6 +468,17 @@ npm run tauri build    # build the installers (src-tauri/target/release/bundle/n
 npx tsc --noEmit       # type-check
 ```
 
+### Tech stack
+
+| Layer | Choice |
+|---|---|
+| App shell | Tauri 2 (Rust) with the system WebView (WebView2) |
+| Interface | Plain TypeScript and DOM APIs, built with Vite; no frontend framework |
+| PDF rendering and text | PDF.js |
+| Saving annotations into PDFs | pdf-lib |
+| AI chat | Anthropic Messages and OpenAI-compatible Chat Completions, called from Rust; keys in Windows Credential Manager |
+| Offline translation and summaries | Transformers.js (ONNX Runtime on WebGPU or WebAssembly) in a Web Worker |
+
 ### Project structure
 
 ```
