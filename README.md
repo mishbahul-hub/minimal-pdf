@@ -575,6 +575,11 @@ rather than in a public issue. How the app protects you:
 
 ## Changelog
 
+**0.2.2**
+- New pen and highlighter icons in the right-click menu.
+- While writing or highlighting, the mouse pointer becomes the pen or marker itself, with the
+  stroke starting at its tip; the nib or barrel shows the colour.
+
 **0.2.1**
 - Fixed chat with the newer Gemini models, which stopped after the first search ("missing a
   thought_signature").
