@@ -1,6 +1,6 @@
 // Right-click radial menu: tools on an inner ring around the cursor, colours and sizes on an outer ring.
 // No toolbar: this is the only annotation UI besides the text-comment editor.
-import { TOOLS, getStyle, getTool, setStyle, setTool, type Tool } from "./annotate";
+import { TOOLS, getStyle, getTool, penSvg, setStyle, setTool, type Tool } from "./annotate";
 import { registerOverlay, unregisterOverlay } from "./overlays";
 import { getDoc } from "./viewer";
 import { askAboutSelection, currentSelection, QUICK_ACTIONS, toggleChat, type Selected } from "./ai";
@@ -21,10 +21,8 @@ const SOFT = 'fill="currentColor" fill-opacity="0.12"';
 const ICONS: Record<Tool, (c: string) => string> = {
   pointer: () =>
     `<path ${SOFT} d="M6.3 3.8 18 12.6c.5.4.3 1.2-.4 1.3l-4.5.7 2.5 5.1c.2.5 0 1-.4 1.2l-1.2.6c-.5.2-1 0-1.2-.5l-2.4-5.1-3.3 3c-.5.5-1.3.1-1.3-.6V4.3c0-.6.6-.9 1.1-.5z"/>`,
-  pen: (c) =>
-    `<path ${SOFT} d="M8.2 3.5h7.6l.9 6.8L12 20.5l-4.7-10.2z"/>` +
-    `<path d="M7.3 10.3h9.4M12 20.5v-6.4"/>` +
-    `<circle cx="12" cy="12.6" r="1.7" fill="${c}" stroke="none"/>`,
+  // The same pen the cursor shows while writing (penSvg), outlined in the button colour.
+  pen: (c) => penSvg(2.6, 21.4, 0.74, { body: SOFT, line: "currentColor", ink: c, width: 1.4 }),
   pencil: (c) =>
     `<path ${SOFT} d="M15.9 3.4a1.5 1.5 0 0 1 2.1 0l2.6 2.6a1.5 1.5 0 0 1 0 2.1L9.2 19.5 4 20.5l1-5.2z"/>` +
     `<path d="M14.2 5.2l4.6 4.6M5 15.3l4.2 4.2"/>` +

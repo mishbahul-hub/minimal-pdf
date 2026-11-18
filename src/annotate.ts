@@ -109,6 +109,25 @@ export function dropTool(): boolean {
   return true;
 }
 
+/**
+ * The pen, drawn diagonally with its nib at (x, y) pointing down-left: nib, barrel, band, cap and
+ * pocket clip. `k` scales it (1 = 32 px long), `body` is the fill attributes, `line` the outline
+ * colour, `ink` the nib's tip (the colour it writes with). Shared by the radial icon and the cursor.
+ */
+export function penSvg(x: number, y: number, k: number, o: { body: string; line: string; ink: string; width: number }) {
+  const n = (v: number) => +(v * k).toFixed(2);
+  return (
+    `<g transform="translate(${x} ${y}) rotate(-45)" stroke="${o.line}" stroke-width="${o.width}" stroke-linejoin="round" stroke-linecap="round">` +
+    `<path d="M0 0L${n(7)} ${n(-3.1)}V${n(3.1)}Z" ${o.body}/>` +
+    `<rect x="${n(7)}" y="${n(-3.4)}" width="${n(18)}" height="${n(6.8)}" rx="${n(1.2)}" ${o.body}/>` +
+    `<path d="M${n(21)} ${n(-3.4)}V${n(3.4)}" fill="none"/>` +
+    `<rect x="${n(25)}" y="${n(-3)}" width="${n(6)}" height="${n(6)}" rx="${n(2.2)}" ${o.body}/>` +
+    `<path d="M${n(24)} ${n(3.4)}V${n(6.8)}H${n(12.5)}" fill="none"/>` +
+    `<path d="M0 0L${n(2.8)} ${n(-1.25)}V${n(1.25)}Z" fill="${o.ink}" stroke="none"/>` +
+    `</g>`
+  );
+}
+
 /** A cursor showing the tool's size and colour (pen, pencil, highlighter, eraser). */
 function updateCursor() {
   const s = getStyle(tool);
