@@ -129,6 +129,35 @@ export function penSvg(x: number, y: number, k: number, o: { body: string; line:
 }
 
 /**
+ * The highlighter (a marker), drawn diagonally with its chisel tip centred on (x, y) pointing
+ * down-left: dark tip, barrel in the ink colour (with a shaded half), navy cap and clip. `k` scales it
+ * (1 = about 31 px long). `halo` draws the same outline in white, to put underneath for dark pages.
+ */
+export function highlighterSvg(x: number, y: number, k: number, ink: string, halo = false) {
+  const n = (v: number) => +(v * k).toFixed(2);
+  const f = (c: string) => (halo ? 'fill="white" stroke="white" stroke-width="3.2" stroke-linejoin="round"' : `fill="${c}"`);
+  return (
+    `<g transform="translate(${x} ${y}) rotate(-45)"${halo ? "" : ' stroke="none"'}>` +
+    `<path d="M0 ${n(-1.5)}L${n(4.5)} ${n(-3.2)}V${n(3.2)}L0 ${n(1.5)}Z" ${f("#1f3147")}/>` +
+    `<rect x="${n(4.5)}" y="${n(-4.2)}" width="${n(13.5)}" height="${n(8.4)}" ${f(ink)}/>` +
+    (halo ? "" : `<rect x="${n(4.5)}" y="0" width="${n(13.5)}" height="${n(4.2)}" fill="#0b1a2e" fill-opacity="0.14"/>`) +
+    `<rect x="${n(17.5)}" y="${n(-4.6)}" width="${n(13)}" height="${n(9.2)}" rx="${n(1.6)}" ${f("#2c405a")}/>` +
+    `<rect x="${n(20)}" y="${n(-6.8)}" width="${n(9)}" height="${n(3.2)}" rx="${n(1)}" ${f("#1b2a3d")}/>` +
+    `</g>`
+  );
+}
+
+/** The highlighter cursor: the marker, tip on the hotspot (the middle of the stroke), white halo. */
+function highlighterCursor(ink: string) {
+  const svg =
+    `<svg xmlns="${SVG_NS}" width="32" height="32" viewBox="0 0 32 32">` +
+    highlighterSvg(3, 29, 1, ink, true) +
+    highlighterSvg(3, 29, 1, ink) +
+    `</svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 3 29, crosshair`;
+}
+
+/**
  * The pen cursor: the pen itself (blue outline, light-blue body, nib in the ink colour), with the
  * nib tip on the hotspot so the line starts exactly at its point, and a white halo so it stays
  * visible on dark pages.
@@ -143,18 +172,20 @@ function penCursor(ink: string) {
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 3 29, crosshair`;
 }
 
-/** The cursor while drawing: the pen shows itself; pencil, highlighter and eraser show their size and colour. */
+/** The cursor while drawing: the pen and highlighter show themselves; pencil and eraser show their size and colour. */
 function updateCursor() {
   const s = getStyle(tool);
   const zoom = parseFloat(getComputedStyle(scroller).getPropertyValue("--zoom")) || 1;
   let cursor = "";
   if (tool === "pen") {
     cursor = penCursor(s.color);
-  } else if (tool === "pencil" || tool === "highlighter" || tool === "eraser") {
+  } else if (tool === "highlighter") {
+    cursor = highlighterCursor(s.color);
+  } else if (tool === "pencil" || tool === "eraser") {
     const d = Math.max(4, Math.min(64, Math.round(s.width * zoom)));
     const size = d + 4;
     const c = size / 2;
-    const fill = tool === "eraser" ? "rgba(255,255,255,0.6)" : tool === "highlighter" ? s.color + "99" : s.color;
+    const fill = tool === "eraser" ? "rgba(255,255,255,0.6)" : s.color;
     const svg = `<svg xmlns="${SVG_NS}" width="${size}" height="${size}"><circle cx="${c}" cy="${c}" r="${d / 2}" fill="${fill}" stroke="${tool === "eraser" ? "#555" : "white"}" stroke-width="1"/></svg>`;
     cursor = `url("data:image/svg+xml,${encodeURIComponent(svg)}") ${c} ${c}, crosshair`;
   }

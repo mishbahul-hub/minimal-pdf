@@ -1,6 +1,6 @@
 // Right-click radial menu: tools on an inner ring around the cursor, colours and sizes on an outer ring.
 // No toolbar: this is the only annotation UI besides the text-comment editor.
-import { TOOLS, getStyle, getTool, penSvg, setStyle, setTool, type Tool } from "./annotate";
+import { TOOLS, getStyle, getTool, highlighterSvg, penSvg, setStyle, setTool, type Tool } from "./annotate";
 import { registerOverlay, unregisterOverlay } from "./overlays";
 import { getDoc } from "./viewer";
 import { askAboutSelection, currentSelection, QUICK_ACTIONS, toggleChat, type Selected } from "./ai";
@@ -27,10 +27,9 @@ const ICONS: Record<Tool, (c: string) => string> = {
     `<path ${SOFT} d="M15.9 3.4a1.5 1.5 0 0 1 2.1 0l2.6 2.6a1.5 1.5 0 0 1 0 2.1L9.2 19.5 4 20.5l1-5.2z"/>` +
     `<path d="M14.2 5.2l4.6 4.6M5 15.3l4.2 4.2"/>` +
     `<path d="M4 20.5l.6-3.1 2.5 2.5z" fill="${c}" stroke="${c}" stroke-width="1"/>`,
+  // The marker the cursor shows while highlighting (highlighterSvg), over a stroke of its colour.
   highlighter: (c) =>
-    `<path d="M3.5 20.6h10" stroke="${c}" stroke-width="3.2" opacity="0.95"/>` +
-    `<path ${SOFT} d="M17.9 2.9 21.1 6.1 13.1 14.1 9.9 10.9z"/>` +
-    `<path d="M9.9 10.9 13.1 14.1 10.3 16.9 7.1 13.7z" fill="${c}" fill-opacity="0.85"/>`,
+    `<path d="M4.2 21h15.6" stroke="${c}" stroke-width="2.4"/>` + highlighterSvg(4, 18.2, 0.66, c),
   eraser: () =>
     `<path ${SOFT} d="M14.6 3.6a1.5 1.5 0 0 1 2.1 0l3.7 3.7a1.5 1.5 0 0 1 0 2.1L11 18.8 5.2 13z"/>` +
     `<path d="M5.2 13 11 18.8l-1.2 1.2H7.2l-3-3a1.5 1.5 0 0 1 0-2.1z" fill="#f48fb1" fill-opacity="0.75"/>` +
