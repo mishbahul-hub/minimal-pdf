@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Minimal PDF: a fast, keyboard-first PDF reader for Windows</title>
+  <meta name="description" content="A free, lightweight (~8 MB) PDF reader for Windows where the page is the whole interface. Keyboard shortcuts, annotations, an AI assistant that cites pages, and offline translation into Hindi, Marathi, Assamese, Bengali and Arabic.">
+  <link rel="canonical" href="https://mishbahul-hub.github.io/minimal-pdf/">
+  <link rel="icon" type="image/png" href="icon.png">
+  <meta name="theme-color" content="#2f6bff">
+
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Minimal PDF: a fast, keyboard-first PDF reader for Windows">
+  <meta property="og:description" content="Free, ~8 MB, no toolbar. Annotations, an AI assistant that cites pages, and offline translation.">
+  <meta property="og:url" content="https://mishbahul-hub.github.io/minimal-pdf/">
+  <meta property="og:image" content="https://mishbahul-hub.github.io/minimal-pdf/screenshots/03-annotations.webp">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="#"><img src="icon.png" alt="" width="28" height="28"> Minimal PDF</a>
+    <nav>
+      <a href="#features">Features</a>
+      <a href="#ai">AI</a>
+      <a href="#faq">FAQ</a>
+      <a href="https://github.com/mishbahul-hub/minimal-pdf">GitHub</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <img class="hero-icon" src="icon.png" alt="" width="96" height="96">
+      <h1>Minimal PDF</h1>
+      <p class="tagline">A fast, keyboard-first PDF reader for Windows where the page is the whole interface.</p>
+      <div class="cta">
+        <a id="download" class="btn primary" href="https://github.com/mishbahul-hub/minimal-pdf/releases/latest">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0-4.5-4.5M12 15l4.5-4.5M4 19h16"/></svg>
+          Download for Windows
+        </a>
+        <a class="btn" href="https://github.com/mishbahul-hub/minimal-pdf">View on GitHub</a>
+      </div>
+      <p class="meta"><span id="version">Free and open source</span> · ~8 MB · Windows 10 and 11</p>
+      <img class="hero-shot" src="screenshots/03-annotations.webp" alt="Minimal PDF showing a page with highlights, a circled word and a handwritten-style comment" width="1375" height="1000">
+    </section>
+
+    <section id="features" class="points">
+      <div>
+        <h3>Opens instantly</h3>
+        <p>Only the pages on screen are drawn, so a 500-page book scrolls as smoothly as a 5-page one.</p>
+      </div>
+      <div>
+        <h3>No toolbar</h3>
+        <p>Search, contents and tools appear when you ask for them and close with <kbd>Esc</kbd>.</p>
+      </div>
+      <div>
+        <h3>Keyboard first</h3>
+        <p><kbd>j</kbd> <kbd>k</kbd> to scroll, <kbd>/</kbd> to search, <kbd>t</kbd> for contents, <kbd>?</kbd> for everything else.</p>
+      </div>
+      <div>
+        <h3>Your files stay yours</h3>
+        <p>Annotations are kept separately. Your PDF only changes if you choose to save them into it.</p>
+      </div>
+    </section>
+
+    <section class="feature">
+      <div class="text">
+        <h2>Annotate from a ring around your cursor</h2>
+        <p>Right-click anywhere: pen, highlighter, pencil, shapes, eraser and text comments, with colours and sizes on the outer ring. While you write, the cursor becomes the pen itself.</p>
+        <p>Save a new PDF with your annotations drawn in, so they show in any reader.</p>
+      </div>
+      <img src="screenshots/02-radial.webp" alt="The right-click radial menu with tools and highlighter colours" loading="lazy" width="1375" height="1000">
+    </section>
+
+    <section id="ai" class="feature reverse">
+      <div class="text">
+        <h2>Ask the PDF, get answers with page numbers</h2>
+        <p>Press <kbd>c</kbd> and ask anything. The AI searches and reads the document itself, shows each step, and cites the pages it used. Click a citation to jump there.</p>
+        <p>Works with free API keys (Google Gemini, Groq, Hugging Face, OpenRouter), fully offline with Ollama, or with Claude.</p>
+      </div>
+      <img src="screenshots/06-chat.webp" alt="Chat panel answering a question about the PDF with page citations" loading="lazy" width="1375" height="1000">
+    </section>
+
+    <section class="feature">
+      <div class="text">
+        <h2>Translate into your language, offline</h2>
+        <p>Select English text and translate it into <b>Hindi, Marathi, Assamese, Bengali or Arabic</b>, or summarise it first. The models run on your computer: no key, and your text never leaves it.</p>
+        <p>Explain, Simplify and Define are one right-click away too.</p>
+      </div>
+      <img src="screenshots/05-translate.webp" alt="A sentence translated into Hindi in a card next to the text" loading="lazy" width="1375" height="1000">
+    </section>
+
+    <section class="gallery">
+      <h2>Light, dark or sepia</h2>
+      <div class="shots">
+        <figure><img src="screenshots/07-search-dark.webp" alt="Search results highlighted in the dark theme" loading="lazy" width="1375" height="1000"><figcaption>Search in the dark theme</figcaption></figure>
+        <figure><img src="screenshots/08-contents-sepia.webp" alt="Table of contents sidebar in the sepia theme" loading="lazy" width="1375" height="1000"><figcaption>Contents in sepia</figcaption></figure>
+        <figure><img src="screenshots/09-settings.webp" alt="Settings window with the liquid-glass style" loading="lazy" width="1375" height="1000"><figcaption>Settings with the glass style</figcaption></figure>
+      </div>
+    </section>
+
+    <section id="faq" class="faq">
+      <h2>Questions</h2>
+      <details>
+        <summary>Is it free?</summary>
+        <p>Yes, and open source under the MIT license. AI chat costs nothing with the free tiers of Gemini, Groq, Hugging Face or OpenRouter, or with Ollama on your own computer.</p>
+      </details>
+      <details>
+        <summary>Windows says "Windows protected your PC". Is it safe?</summary>
+        <p>The installer isn't code-signed yet, so Windows doesn't recognise the publisher. Choose <b>More info → Run anyway</b>. The source code and the build are public on GitHub, and updates are signed.</p>
+      </details>
+      <details>
+        <summary>Does it work offline?</summary>
+        <p>Reading, search, annotations and saving always work offline. Translate and Summarize work offline after a one-time model download. The chat works offline with Ollama.</p>
+      </details>
+      <details>
+        <summary>Is my PDF uploaded anywhere?</summary>
+        <p>No. Nothing is sent until you ask the AI something, and then only your question and the pages it reads go to the provider you chose. API keys are stored in Windows Credential Manager.</p>
+      </details>
+      <details>
+        <summary>macOS or Linux?</summary>
+        <p>Not yet. Windows only for now.</p>
+      </details>
+      <details>
+        <summary>How do I update?</summary>
+        <p>The app checks for new versions when it starts and offers <b>Install and restart</b>.</p>
+      </details>
+    </section>
+
+    <section class="final">
+      <h2>Read without the clutter</h2>
+      <a class="btn primary" data-download href="https://github.com/mishbahul-hub/minimal-pdf/releases/latest">Download for Windows</a>
+    </section>
+  </main>
+
+  <footer>
+    <span>© 2026 Minimal PDF · <a href="https://github.com/mishbahul-hub/minimal-pdf/blob/main/LICENSE">MIT License</a></span>
+    <span><a href="https://github.com/mishbahul-hub/minimal-pdf">GitHub</a> · <a href="https://github.com/mishbahul-hub/minimal-pdf#changelog">Changelog</a> · <a href="https://github.com/mishbahul-hub/minimal-pdf/issues">Report a problem</a></span>
+  </footer>
+
+  <script>
+    // Point the download buttons straight at the newest installer; keep the Releases page if this fails.
+    (async () => {
+      try {
+        const res = await fetch("https://api.github.com/repos/mishbahul-hub/minimal-pdf/releases/latest");
+        if (!res.ok) return;
+        const rel = await res.json();
+        const exe = (rel.assets || []).find((a) => /_x64-setup\.exe$/.test(a.name));
+        if (!exe) return;
+        for (const a of document.querySelectorAll("#download, [data-download]")) a.href = exe.browser_download_url;
+        const mb = (exe.size / 1048576).toFixed(1);
+        document.getElementById("version").textContent = `Version ${rel.tag_name.replace(/^v/, "")} · free and open source`;
+        document.querySelector(".meta").lastChild.textContent = ` · ${mb} MB · Windows 10 and 11`;
+      } catch {}
+    })();
+  </script>
+</body>
+</html>
