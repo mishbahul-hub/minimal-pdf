@@ -128,12 +128,29 @@ export function penSvg(x: number, y: number, k: number, o: { body: string; line:
   );
 }
 
-/** A cursor showing the tool's size and colour (pen, pencil, highlighter, eraser). */
+/**
+ * The pen cursor: the pen itself (blue outline, light-blue body, nib in the ink colour), with the
+ * nib tip on the hotspot so the line starts exactly at its point, and a white halo so it stays
+ * visible on dark pages.
+ */
+function penCursor(ink: string) {
+  const at = (line: string, width: number, body: string) => penSvg(3, 29, 1, { body, line, ink, width });
+  const svg =
+    `<svg xmlns="${SVG_NS}" width="32" height="32" viewBox="0 0 32 32">` +
+    at("white", 3.4, 'fill="white"') +
+    at("#2b5cff", 1.5, 'fill="#d6e3ff"') +
+    `</svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 3 29, crosshair`;
+}
+
+/** The cursor while drawing: the pen shows itself; pencil, highlighter and eraser show their size and colour. */
 function updateCursor() {
   const s = getStyle(tool);
   const zoom = parseFloat(getComputedStyle(scroller).getPropertyValue("--zoom")) || 1;
   let cursor = "";
-  if (tool === "pen" || tool === "pencil" || tool === "highlighter" || tool === "eraser") {
+  if (tool === "pen") {
+    cursor = penCursor(s.color);
+  } else if (tool === "pencil" || tool === "highlighter" || tool === "eraser") {
     const d = Math.max(4, Math.min(64, Math.round(s.width * zoom)));
     const size = d + 4;
     const c = size / 2;
