@@ -20,6 +20,7 @@
 </p>
 
 <p align="center">
+  <a href="https://mishbahul-hub.github.io/minimal-pdf/">Website</a> ·
   <a href="#installation">Download</a> ·
   <a href="#screenshots">Screenshots</a> ·
   <a href="#ai-assistant">AI assistant</a> ·
@@ -101,7 +102,8 @@ public-domain US government publication.</sub>
 
 ## Installation
 
-1. Download `Minimal.PDF_<version>_x64-setup.exe` from the
+1. Download from the [website](https://mishbahul-hub.github.io/minimal-pdf/), or download
+   `Minimal.PDF_<version>_x64-setup.exe` from the
    [latest release](https://github.com/mishbahul-hub/minimal-pdf/releases/latest) and run it. An `.msi`
    installer is there too, for installing with company tools.
 2. Windows may show a SmartScreen warning ("unknown publisher") because the installer is not
