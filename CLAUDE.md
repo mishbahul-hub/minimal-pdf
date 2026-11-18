@@ -61,11 +61,13 @@ src/
   hf.ts          offline translation (en → hi, mr, as, bn, ar) and summarization, summarize-then-translate; talks to hfworker.ts
   hfworker.ts    Web Worker running the Transformers.js pipelines (NLLB-200, DistilBART), model status / download / remove
   export.ts      save a new PDF with the annotations drawn in (pdf-lib), a plain copy, or (confirmed) replace the original
-  (tools/eval/   translation-quality evaluation: FLORES-101 runner, BLEU/chrF metrics, results)
   aisettings.ts  Settings dialog (Ctrl+,), four tabs: General (theme, pop-up style + transparency, translation language, version), Chat AI, Translate & summarize (offline models: status, download, remove), API keys (list + Remove)
   styles.css
   vite-env.d.ts  Vite client types (needed for CSS and `?url` imports under TS 6)
 index.html
+tools/eval/      translation-quality evaluation: FLORES-101 runner, BLEU/chrF metrics, results
+docs/screenshots/  README screenshots (WebP), captured from the running app over DevTools
+docs/interview/  project guide for résumés and interviews (architecture, AI, ML, Q&A); keep in sync with big changes
 src-tauri/
   tauri.conf.json
   capabilities/default.json   plugin permissions
