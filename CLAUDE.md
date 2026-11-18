@@ -3,7 +3,7 @@
 Minimalist, keyboard-first desktop PDF reader built with **Tauri 2 + vanilla TypeScript + PDF.js **.
 The page is the whole interface. Targets: opens instantly, stays out of the way, installer under ~10 MB.
 
-**Status: v0.2.0+: v1 + AI with any provider (free keys: Gemini, Groq, Hugging Face, OpenRouter; Ollama offline; Claude) + release pipeline (GitHub Actions, signed auto-updates).** Next: only when asked (stretch goals below). Update this line when a stage's "done when" check passes.
+**Status: v0.2.1 (published on GitHub Releases): v1 + AI with any provider (free keys: Gemini, Groq, Hugging Face, OpenRouter; Ollama offline; Claude) + release pipeline (GitHub Actions, signed auto-updates).** Next: only when asked (stretch goals below). Update this line when a stage's "done when" check passes.
 
 ## Design principles (do not violate)
 
