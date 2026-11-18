@@ -15,6 +15,7 @@
   <img alt="PDF.js 6" src="https://img.shields.io/badge/PDF%20engine-PDF.js%206-E3412F?style=for-the-badge&logo=mozilla&logoColor=white">
   <img alt="Vite 8" src="https://img.shields.io/badge/Bundler-Vite%208-646CFF?style=for-the-badge&logo=vite&logoColor=white">
   <img alt="AI: any provider" src="https://img.shields.io/badge/AI-Any%20provider-D97757?style=for-the-badge&logo=anthropic&logoColor=white">
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-2E7D32?style=for-the-badge"></a>
   <img alt="Installer about 3 MB" src="https://img.shields.io/badge/Installer-~3%20MB-6A1B9A?style=for-the-badge">
 </p>
 
@@ -704,4 +705,8 @@ with Meta's [NLLB-200](https://huggingface.co/facebook/nllb-200-distilled-600M) 
 
 ## License
 
-*Add a license here (e.g. MIT).*
+Minimal PDF is released under the [MIT License](LICENSE).
+
+The offline translation model (NLLB-200) has its own licence, CC-BY-NC-4.0 (non-commercial use). It is
+not part of this repository or the installer: the app downloads it from Hugging Face the first time
+you use Translate.
