@@ -154,6 +154,9 @@ Right-click on a page (or press `a`) and a ring of tools appears around the curs
 
 - **Inner ring:** pointer (back to reading and selecting text), pen, pencil, highlighter, eraser,
   rectangle, circle and text comment.
+- **Cursor:** with the pen, the mouse pointer becomes the pen itself, with the line starting at its
+  nib, and the nib shows the ink colour. The pencil, highlighter and eraser show a dot of their size
+  and colour.
 - **Outer ring:** colours and three sizes for the tool under your cursor, plus a rainbow button for
   **any colour you like**. The highlighter offers light, see-through colours (yellow, green, blue,
   pink, orange, lavender) so the text underneath stays readable.
