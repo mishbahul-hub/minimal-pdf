@@ -161,8 +161,9 @@ Right-click on a page (or press `a`) and a ring of tools appears around the curs
   with the stroke starting at its tip; the nib or the marker's barrel shows the colour. The pencil and
   eraser show a dot of their size and colour.
 - **Outer ring:** colours and three sizes for the tool under your cursor, plus a rainbow button for
-  **any colour you like**. The highlighter offers light, see-through colours (yellow, green, blue,
-  pink, orange, lavender) so the text underneath stays readable.
+  **any colour you like**. Colours you pick that way stay in the ring as recent colours (the last
+  three for each tool). The highlighter offers marker colours (yellow, green, blue, pink, orange,
+  purple), drawn see-through so the text underneath stays readable.
 - **Bottom of the ring:** the **save** button (floppy disk) and the **settings** gear.
 
 Inside the open menu, `1`–`8` pick a tool, `9` opens the AI, and `Esc` closes it.
