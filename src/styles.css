@@ -928,6 +928,13 @@ svg.ink text {
     0 3px 8px var(--glass-drop);
 }
 
+/* A recently picked custom colour: a little smaller, with a white ring, so it reads as "yours". */
+#radial .opt.swatch.recent {
+  width: 24px;
+  height: 24px;
+  border: 2px solid #fff;
+}
+
 #radial .opt.custom {
   background: conic-gradient(#f44336, #ffeb3b, #4caf50, #00bcd4, #3f51b5, #e91e63, #f44336);
 }

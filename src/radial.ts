@@ -1,6 +1,6 @@
 // Right-click radial menu: tools on an inner ring around the cursor, colours and sizes on an outer ring.
 // No toolbar: this is the only annotation UI besides the text-comment editor.
-import { TOOLS, getStyle, getTool, highlighterSvg, penSvg, setStyle, setTool, type Tool } from "./annotate";
+import { TOOLS, addRecentColor, getRecentColors, getStyle, getTool, highlighterSvg, penSvg, setStyle, setTool, type Tool } from "./annotate";
 import { registerOverlay, unregisterOverlay } from "./overlays";
 import { getDoc } from "./viewer";
 import { askAboutSelection, currentSelection, QUICK_ACTIONS, toggleChat, type Selected } from "./ai";
@@ -168,12 +168,15 @@ function showOptions(t: Slot, force = false) {
   const style = getStyle(t);
   const items: HTMLElement[] = [];
 
-  for (const c of def.colors) {
+  // The palette, then the custom colours picked recently (newest first).
+  const recent = t === "pointer" || t === "eraser" ? [] : getRecentColors(t);
+  const swatches = [...def.colors, ...recent];
+  for (const c of swatches) {
     const b = document.createElement("button");
     b.type = "button";
-    b.className = "opt swatch";
+    b.className = recent.includes(c) ? "opt swatch recent" : "opt swatch";
     b.style.background = c;
-    b.title = c;
+    b.title = recent.includes(c) ? `${c} (recently used)` : c;
     if (c.toLowerCase() === style.color.toLowerCase()) b.classList.add("active");
     b.addEventListener("click", () => {
       void setStyle(t, { color: c });
@@ -187,7 +190,7 @@ function showOptions(t: Slot, force = false) {
     b.type = "button";
     b.className = "opt custom";
     b.title = "Any colour…";
-    if (!def.colors.some((c) => c.toLowerCase() === style.color.toLowerCase())) {
+    if (!swatches.some((c) => c.toLowerCase() === style.color.toLowerCase())) {
       b.classList.add("active");
       b.style.setProperty("--chosen", style.color);
     }
@@ -195,6 +198,8 @@ function showOptions(t: Slot, force = false) {
       colorInput.value = style.color;
       colorInput.oninput = () => void setStyle(t, { color: colorInput.value }).then(refresh);
       colorInput.onchange = () => {
+        // A colour picked here joins the ring as a recent swatch.
+        void addRecentColor(t, colorInput.value);
         if (getTool() !== t) setTool(t);
         closeRadial();
       };

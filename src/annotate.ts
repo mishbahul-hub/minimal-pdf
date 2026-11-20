@@ -29,8 +29,9 @@ export const TOOLS: { id: Tool; label: string; colors: string[]; widths: number[
   { id: "pointer", label: "Select text (no tool)", colors: [], widths: [] },
   { id: "pen", label: "Pen", colors: ["#1f1f1f", "#e53935", "#1e63d6", "#2e7d32", "#f57c00", "#7b1fa2"], widths: [1.5, 2.5, 4.5] },
   { id: "pencil", label: "Pencil", colors: ["#4a4a4a", "#8d6e63", "#1e63d6", "#c62828", "#2e7d32", "#6a1b9a"], widths: [1, 1.8, 3] },
-  // Light, see-through colours so the text underneath stays readable.
-  { id: "highlighter", label: "Highlighter", colors: ["#fff176", "#b9f6ca", "#b3e5fc", "#f8bbd0", "#ffe0b2", "#e1bee7"], widths: [10, 16, 24] },
+  // Marker colours: strong enough to see clearly, still drawn see-through (opacity 0.5, multiply) so
+  // the text underneath stays readable.
+  { id: "highlighter", label: "Highlighter", colors: ["#ffe100", "#3ddc84", "#29b6f6", "#ff5fa2", "#ff9800", "#b388ff"], widths: [10, 16, 24] },
   { id: "eraser", label: "Eraser", colors: [], widths: [8, 16, 32] },
   { id: "rect", label: "Rectangle", colors: ["#e53935", "#1e63d6", "#2e7d32", "#f57c00", "#1f1f1f", "#7b1fa2"], widths: [1.5, 2.5, 4.5] },
   { id: "ellipse", label: "Circle", colors: ["#e53935", "#1e63d6", "#2e7d32", "#f57c00", "#1f1f1f", "#7b1fa2"], widths: [1.5, 2.5, 4.5] },
@@ -40,7 +41,7 @@ export const TOOLS: { id: Tool; label: string; colors: string[]; widths: number[
 const DEFAULT_STYLES: Record<Exclude<Tool, "pointer">, Style> = {
   pen: { color: "#1f1f1f", width: 2.5 },
   pencil: { color: "#4a4a4a", width: 1.8 },
-  highlighter: { color: "#fff176", width: 16 },
+  highlighter: { color: "#ffe100", width: 16 },
   eraser: { color: "#000000", width: 16 },
   rect: { color: "#e53935", width: 2.5 },
   ellipse: { color: "#e53935", width: 2.5 },
@@ -56,9 +57,43 @@ const scroller = document.querySelector<HTMLElement>("#pages")!;
 let tool: Tool = "pointer";
 scroller.dataset.tool = tool;
 let styles: Record<string, Style> = structuredClone(DEFAULT_STYLES);
+/** The old, very light highlighter palette → its darker replacement (for saved styles). */
+const OLD_HIGHLIGHTS: Record<string, string> = {
+  "#fff176": "#ffe100",
+  "#b9f6ca": "#3ddc84",
+  "#b3e5fc": "#29b6f6",
+  "#f8bbd0": "#ff5fa2",
+  "#ffe0b2": "#ff9800",
+  "#e1bee7": "#b388ff",
+};
 const stylesReady = getSetting<Record<string, Style>>("annotationStyles").then((s) => {
   if (s) styles = { ...styles, ...s };
+  const hl = styles.highlighter;
+  const darker = hl && OLD_HIGHLIGHTS[hl.color.toLowerCase()];
+  if (darker) styles.highlighter = { ...hl, color: darker };
 });
+
+// Custom colours picked with the colour picker, newest first, per tool (shown in the radial ring).
+const MAX_RECENT = 3;
+let recentColors: Record<string, string[]> = {};
+const recentReady = getSetting<Record<string, string[]>>("recentColors").then((r) => {
+  if (r) recentColors = r;
+});
+
+/** The tool's recently picked custom colours, newest first (none of them in its palette). */
+export function getRecentColors(t: Tool): string[] {
+  const palette = TOOLS.find((x) => x.id === t)?.colors.map((c) => c.toLowerCase()) ?? [];
+  return (recentColors[t] ?? []).filter((c) => !palette.includes(c));
+}
+
+/** Remember a custom colour for the tool's ring (moves it to the front if already there). */
+export async function addRecentColor(t: Tool, color: string) {
+  await recentReady;
+  const c = color.toLowerCase();
+  if (TOOLS.find((x) => x.id === t)?.colors.some((p) => p.toLowerCase() === c)) return;
+  recentColors[t] = [c, ...(recentColors[t] ?? []).filter((x) => x !== c)].slice(0, MAX_RECENT);
+  await setSetting("recentColors", recentColors);
+}
 
 // Current document's annotations.
 let pages = new Map<number, Ann[]>();
