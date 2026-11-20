@@ -579,6 +579,12 @@ rather than in a public issue. How the app protects you:
 
 ## Changelog
 
+**0.2.3**
+- Darker, marker-strength highlighter colours (yellow, green, blue, pink, orange, purple); a saved
+  pale colour switches to its darker version.
+- Colours you pick with the rainbow picker stay in the ring as recent colours (the last three per
+  tool).
+
 **0.2.2**
 - New pen and highlighter icons in the right-click menu.
 - While writing or highlighting, the mouse pointer becomes the pen or marker itself, with the
